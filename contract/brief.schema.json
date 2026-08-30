@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://owari.local/brief.schema.json",
-  "title": "Owari Brief",
+  "$id": "https://crewmate.local/brief.schema.json",
+  "title": "Crewmate Brief",
   "description": "FROZEN CONTRACT. Do not edit. Source of truth is docs/DATA_MODEL.md, section 'The Brief contract'. If this file appears wrong, stop and raise it with Rayhan.",
   "type": "object",
   "required": ["task_name", "environment", "variables", "steps", "pruned"],
@@ -15,7 +15,7 @@
     },
     "environment": {
       "type": "array",
-      "description": "Human-readable requirements. Display only — Owari does not provision these.",
+      "description": "Human-readable requirements. Display only — Crewmate does not provision these.",
       "items": { "type": "string", "minLength": 1 }
     },
     "variables": {

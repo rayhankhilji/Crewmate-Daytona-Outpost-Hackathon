@@ -1,6 +1,6 @@
 """Brief step target -> a live accessibility node inside a running sandbox.
 
-This is the single most important idea in Owari. A Brief never carries coordinates; it
+This is the single most important idea in Crewmate. A Brief never carries coordinates; it
 carries a semantic target (role + name), and this module re-resolves that target against
 the accessibility tree of the machine the worker is actually looking at. That is what lets
 a recording made on a Mac at one resolution execute on a Linux sandbox at another.
@@ -19,7 +19,7 @@ from typing import Any
 
 from daytona import DaytonaError, Sandbox
 
-logger = logging.getLogger("owari.executor.grounding")
+logger = logging.getLogger("crewmate.executor.grounding")
 
 # "all" searches every application on the desktop rather than only the focused one, which is
 # what a Brief step means: find this control wherever it is on screen.

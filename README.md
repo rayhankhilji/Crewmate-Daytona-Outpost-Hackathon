@@ -1,47 +1,46 @@
-# Owari
+# Crewmate
 
-**Watch a person do a task once. Work out what they were trying to do. Then do it at scale, in parallel cloud sandboxes.**
+**Show it the job once. It builds you a crew.**
 
-Owari records someone working, turns that recording into a readable plan, lets them correct it, and then executes that plan across many machines at the same time — one per row of input.
+Crewmate watches a person do a task, works out what they were actually trying to accomplish, and then runs that task across a crew of cloud machines at the same time — one per row of your data.
 
----
-
-## The problem
-
-Operations work is trapped in software that has no API and never will: legacy portals, internal admin panels, line-of-business desktop apps. The only ways to automate it today are to write brittle scripts against pixel coordinates, or to pay a person to do it by hand, one row at a time. Existing RPA tools need weeks of configuration by a specialist before a single task runs.
-
-Owari removes the configuration step. You demonstrate the task once.
+Built in a day on [Daytona](https://daytona.io).
 
 ---
 
-## The loop
+## The thing nobody has solved
 
-```
-RECORD      A floating overlay records the screen while you do the task once.
+A huge amount of real work happens inside software that has no API and never will. Internal admin panels. Legacy portals. The line-of-business tool someone's company bought in 2014 and can't replace.
 
-COMPREHEND  Frames are sampled and sent to a vision model, which returns a Brief:
-            an ordered list of steps, each with a plain-English intent and a
-            semantic target — plus detected variables, conditional branches, and
-            the dead-ends it decided to throw away.
+If you want to automate that today you have two options. Write a brittle script against pixel coordinates and watch it break the first time a button moves. Or pay a person to do it by hand, one row at a time, forever.
 
-REVIEW      The recording replays at 8x while the Brief assembles against it.
-            Steps appear on the timeline where they were comprehended from.
-            Pruned segments surface, grey out, and collapse with their reason.
+RPA tools exist. They take weeks of configuration by a specialist before a single task runs.
 
-EDIT        Every step is editable. Change a target, delete a step, remap a
-            variable to a different input column.
-
-EXECUTE     One sandbox per input row. Each runs the same Brief against different
-            data, and reports its screen and status live.
-```
+Crewmate takes one demonstration.
 
 ---
 
-## The two ideas that make it work
+## How it feels to use
 
-### 1. Targets are semantic, never spatial
+You hit record on a small floating bar, do your task once like you normally would, and hit stop.
 
-A Brief step does not say *click at (431, 208)*. It says:
+A few seconds later Crewmate shows you what it understood — not a video, not a macro, but a written plan. *Open the leads section. Search for the company. Open the matching record. Write the research report into the notes field.* Plain English, in order, with the bits that changed between rows marked as variables.
+
+It also shows you what it threw away. If you opened a settings page, poked around, found nothing useful and backed out, that's not part of the job — and Crewmate says so, in the plan, with a reason:
+
+> *"Opened Settings looking for a report template, found every control disabled, and went back"*
+
+That's the moment the thing stops looking like a screen recorder.
+
+You can edit any step. Then you paste in your rows, hit run, and watch a grid of live machines each doing your task with different data.
+
+---
+
+## The idea that makes it work
+
+Here's the problem with recording someone's screen: you recorded it at 1512×982 on a Mac, and it's going to run at 1280×800 on Linux. Every coordinate you captured is now a lie.
+
+So Crewmate doesn't capture any. A step looks like this:
 
 ```json
 {
@@ -51,130 +50,93 @@ A Brief step does not say *click at (431, 208)*. It says:
 }
 ```
 
-At execution time the worker queries the **live accessibility tree** of the machine it is actually looking at and acts on the node it finds. That is what lets a recording made on a Mac at one resolution run on a Linux sandbox at another. The schema rejects any `x` or `y` field outright — `additionalProperties: false` means coordinates cannot be added even by accident.
+No x, no y. At run time each machine queries its own **live accessibility tree** — the same structure a screen reader uses — finds the control called "Leads", and acts on it. The schema physically rejects coordinates; you couldn't add one if you tried.
 
-Matching is on the **name**, with `role` used to rank candidates rather than filter them. This is deliberate and was learned the hard way: a model watching a video can read a control's label, but it cannot know whether the page implemented that control as a `link`, a `push button`, or a `table cell`. Those are invisible markup details that differ between two applications that look identical. In a real run, a Brief guessed several roles wrong — the control it wanted was a `table cell` — and every step still landed correctly.
+We learned something building this that turned out to matter a lot.
 
-### 2. The plan is compiled, not improvised
+The first version demanded the role match exactly. It failed constantly, and the reason is interesting: a model watching a video can read the label on a button, but it has no way to know whether that button was built as a `link`, a `push button`, or — genuinely, in our own app — a `table cell`. Those are invisible implementation details that differ between two apps that look pixel-identical.
 
-The vision model is called at comprehension time and on failure only. It is **never** called per step during execution.
+So we flipped it. **The name is the identity; the role is a hint.** Crewmate matches on what's actually visible and uses the role to rank candidates. In our last run the plan guessed several roles wrong and every single step still landed on the right control.
 
-Most demos of this kind run an agent loop per worker: a model call for every click, seconds each, non-deterministic, different every run. Owari compiles the recording into a deterministic plan once, then replays it. Ten steps execute in about thirteen seconds, and they execute the same way tomorrow.
-
-This is also what makes the Brief the *product surface* rather than an implementation detail. Because the plan is explicit, it can be rendered assembling against the video, and a human can correct step 4 before launching.
+That's the difference between a demo that works on one app and a system that works on apps nobody has seen.
 
 ---
 
-## Pruning: how you can tell it understood
+## Why it's fast
 
-The strongest evidence that a system modelled *intent* rather than recording keystrokes is what it throws away.
+Most agent demos run a model call for every click. Seconds per action, a different answer every time, and eight parallel workers that quietly cost a fortune and finish after the judges have left.
 
-If the person opens a settings page, finds nothing useful, and navigates back, that is not part of the task. Owari excludes it from `steps` and records it in `pruned` with a plain-English reason:
+Crewmate calls the model **once**, at comprehension time, and compiles the recording into a fixed plan. Execution is deterministic. Ten steps run in about thirteen seconds, and they run the same way tomorrow.
 
-```json
-"pruned": [
-  {
-    "at_seconds": 12.5,
-    "reason": "Opened Settings looking for a report template, found every control disabled, and went back"
-  }
-]
-```
-
-An empty `pruned` array is valid. A comprehension pass that never produces one on a messy recording is suspect.
+That's not just a performance trick — it's what makes the plan *visible*. Because the understanding is an explicit list rather than prose in a context window, you can watch it assemble against the video, and you can fix step 4 before you launch.
 
 ---
 
-## Architecture
+## Powered by Daytona
 
-```
-overlay/         Electron. Screen capture, the floating window, upload.
-comprehension/   Frames -> vision model -> validated Brief.
-server/          FastAPI. Routes, SQLite, SSE, orchestration, validation.
-executor/        Every Daytona call in the system. Grounding, actions, the step loop.
-web/             React + Vite. All rendering.
-contract/        The frozen Brief schema. Read-only to every module.
-```
+Every worker is a Daytona sandbox: a full Linux desktop, booted from a snapshot that's already signed into your app.
 
-Each module owns its directory exclusively and talks to the others only through the HTTP contract or a named function boundary. Two rules are enforced by convention and worth knowing:
+That last part is the trick that makes the whole thing safe. **Crewmate never sees a password.** You log in once, by hand, inside a sandbox. You snapshot that machine. Every worker from then on wakes up already authenticated.
 
-- **`executor/` is the only module that imports the Daytona SDK.** Two modules constructing sandbox clients independently would diverge on lifecycle and leak sandboxes, which costs real money.
-- **`comprehension/` is the only module that imports `openai`.**
+Daytona's Computer Use API gives us the accessibility tree, the keyboard, and compressed screenshots — which is exactly the surface this needed and the reason a one-day build could reach live parallel execution at all.
 
-Validation lives in exactly one place, `server/brief_schema.py`, and every write path calls it. There is no second validator to drift out of sync.
+Sandboxes are torn down on every path, including crashes and partial provisioning failures. Across every run we made today, zero leaked.
 
-### Execution, in detail
+---
 
-A run creates one sandbox per input row from a pre-provisioned snapshot — a machine that a human has already signed into by hand. Owari never handles a password; the login is baked into the snapshot before any automation runs.
+## Built by a crew, appropriately enough
 
-Each worker then walks the Brief:
+Three coding agents built this in parallel, in one day, against a frozen interface contract.
 
-- `{{variable}}` references are substituted from that worker's row. An undeclared variable or a missing column **raises** rather than typing a literal `{{company}}` into a live application.
-- A target that cannot be found is retried once, then the worker fails at that step with a readable error. One worker failing never affects another.
-- A conditional step whose target is absent takes its `else` branch — either skipping the step or ending the workflow early, which marks that worker `skipped`. That status is deliberately distinct from `failed`: it means the data led somewhere different, by design.
-- Compressed screenshots stream to the dashboard at least every three seconds.
+**Codex** owned the two hardest human-facing pieces: the Electron overlay that captures the screen without ever producing a black recording, and the entire comprehension pipeline — frame sampling, the vision prompt, and the validate-and-retry loop that turns 90 stills into a structured plan. The prompt engineering that gets a model to preserve typed text verbatim, spot which values are variables, and *hunt for its own dead-ends to discard* is Codex's work, and it's the part of this that feels like magic.
 
-Every sandbox is destroyed on completion **and** on every failure path, including a crash part-way through provisioning. Sandboxes are additionally created `ephemeral`, so Daytona reaps anything that outlives the server process.
+**Claude Code** ran two seats: one on the dashboard, one on the server and the Daytona executor.
+
+They never touched each other's files. Disjoint directory ownership and a frozen `contract/` meant three agents could build simultaneously with zero merge conflicts — which, if you've tried this, you'll know is the entire ballgame.
 
 ---
 
 ## Running it
 
-Requires Python 3.11+, Node 18+, ffmpeg, and a Daytona account.
+Needs Python 3.11+, Node 18+, ffmpeg, and a Daytona account.
 
 ```bash
-cp env.example .env      # then fill it in — see below
+cp env.example .env       # fill it in, see below
 python3.11 -m venv .venv
 .venv/bin/pip install fastapi "uvicorn[standard]" python-multipart daytona openai jsonschema
 ```
 
+Three terminals:
+
 ```bash
-.venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000    # server
-cd web && npm install && npm run dev                              # dashboard, :5173
-cd overlay && npm install && npm start                            # recorder
+.venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000   # server
+cd web && npm install && npm run dev                             # dashboard :5173
+cd overlay && npm install && npm start                           # the record bar
 ```
 
-### Configuration
+You'll need `DAYTONA_API_KEY`, `OPENAI_API_KEY`, a vision-capable `VISION_MODEL`, and `CREWMATE_SNAPSHOT_NAME` — the snapshot you made by signing into your app by hand. `MAX_PARALLEL_WORKERS` should sit at or below your Daytona concurrency limit.
 
-| Variable | Where it comes from |
-|---|---|
-| `DAYTONA_API_KEY` | app.daytona.io/dashboard/keys |
-| `OWARI_SNAPSHOT_NAME` | A snapshot you create by hand: boot a sandbox, sign into your target application, snapshot it. This is the machine every worker forks from. |
-| `OPENAI_API_KEY` | platform.openai.com |
-| `VISION_MODEL` | A vision-capable model id. Set explicitly — there is no default in code, so a renamed model fails at startup rather than confusingly at runtime. |
-| `MAX_PARALLEL_WORKERS` | Must not exceed your Daytona organisation's concurrent sandbox limit. Exceeding it fails mid-run, which is worse than launching fewer. |
-
-The server binds to `127.0.0.1` only and has **no authentication by design**. Do not expose it.
+The server binds to loopback only and has no auth. Keep it that way.
 
 ---
 
-## Notable decisions
+## Under the hood
 
-Recorded in full in `docs/DECISIONS.md`. The ones worth knowing:
+```
+overlay/         Electron. Screen capture, floating window, upload.        [Codex]
+comprehension/   Frames -> vision model -> validated plan.                 [Codex]
+web/             React + Vite. Everything you look at.                     [Claude Code]
+server/          FastAPI, SQLite, SSE, orchestration, validation.          [Claude Code]
+executor/        Every Daytona call. Grounding, actions, the step loop.    [Claude Code]
+contract/        The frozen plan schema. Read-only to all three.
+```
 
-- **The execution environment is provisioned by hand, not inferred.** Working out which applications and logins a workflow needs is an unsolved research problem. Owari declares the environment as text and forks a snapshot a human prepared. That turns a hidden failure into a visible product surface.
-- **Credentials are never handled.** A human logs in once, inside the sandbox, before the snapshot is taken.
-- **`skipped` is a first-class worker status.** Divergence in the grid is what makes parallel execution read as intelligence rather than a loop.
-- **`sandbox.fork()` is not used.** It exists in the Daytona SDK but is supported for VM sandboxes only; Owari runs container sandboxes and creates each worker from the snapshot instead.
+Two boundaries are enforced hard. `executor/` is the only module that imports the Daytona SDK — two modules building sandbox clients independently would diverge on lifecycle and leak machines that cost real money. `comprehension/` is the only module that imports `openai`. And validation lives in exactly one file, so there's no second implementation to drift out of sync.
 
----
+When a run starts, each worker walks the plan against its own row. Variables are substituted from that row — and a missing column raises rather than typing a literal `{{company}}` into a live system. A control that can't be found is retried once, then that worker fails at that step with a readable error and the others carry on untouched.
 
-## Out of scope
+If a conditional's target isn't on screen, the worker takes the other branch — which might mean skipping a step, or finishing early. That worker is marked `skipped`, deliberately distinct from `failed`, because "this row led somewhere different" and "this row broke" are not the same thing and the grid should never conflate them.
 
-Deliberately, and stated so the gaps are not mistaken for oversights:
+We watched exactly that happen: two workers, same plan, different companies. One completed all ten steps and saved a full research report. The other searched, found no match, took the conditional branch, and ended `skipped`.
 
-- Automatic environment inference
-- Credential capture or automated login
-- Scheduling, triggers, or unattended recurring runs
-- Multi-user accounts, teams, permissions, billing
-- Recording anything other than the primary display
-- Executing on the operator's own machine — all execution happens in sandboxes
-
----
-
-## Status
-
-Built in a day, by three agents working in parallel against a frozen contract.
-
-The server and executor are verified end to end against live Daytona: real sandboxes provisioned from a snapshot, steps grounded against real accessibility trees, screenshots streamed over SSE, and every sandbox torn down on both the success and failure paths with no leaks across any run.
-
-A two-worker launch was observed completing a ten-step workflow on one row while the other row took a conditional branch and ended `skipped` — the same Brief, different data, different outcome.
+Same instructions. Different data. Different outcome. That's the whole product in one screen.

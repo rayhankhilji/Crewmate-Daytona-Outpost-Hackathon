@@ -1,10 +1,10 @@
-# Design System: Owari
+# Design System: Crewmate
 
 > The visual language. Every UI decision references these tokens. No ad-hoc values in components.
 
 ## Direction
 
-Dark, precise, instrument-like. Owari watches work and reports what it understood, so the interface should feel like a piece of measuring equipment: dense information, hairline rules, monospace for anything the machine produced, one accent used sparingly to mean "the system is certain about this". Closer to Linear or a Bloomberg terminal than to a SaaS dashboard.
+Dark, precise, instrument-like. Crewmate watches work and reports what it understood, so the interface should feel like a piece of measuring equipment: dense information, hairline rules, monospace for anything the machine produced, one accent used sparingly to mean "the system is certain about this". Closer to Linear or a Bloomberg terminal than to a SaaS dashboard.
 
 It is **not** playful, not rounded, not gradient-heavy, not glassmorphic. No purple-to-blue gradients, no pill buttons, no drop shadows on cards. Emptiness is fine; decoration is not.
 

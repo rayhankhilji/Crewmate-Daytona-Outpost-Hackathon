@@ -1,4 +1,4 @@
-# Architecture: Owari
+# Architecture: Crewmate
 
 > How the system is built and how its parts relate. Schema and the Brief contract live in
 > DATA_MODEL.md; endpoint contracts in API.md; feature behaviour in PRD.md; task sequence in BUILD_PLAN.md.
@@ -26,7 +26,7 @@ Install the Daytona SDK with `pip install daytona`.
 
 ```
 DAYTONA_API_KEY=            # from app.daytona.io/dashboard/keys
-OWARI_SNAPSHOT_NAME=        # the hand-provisioned, logged-in snapshot instantiated for every run
+CREWMATE_SNAPSHOT_NAME=        # the hand-provisioned, logged-in snapshot instantiated for every run
 OPENAI_API_KEY=
 VISION_MODEL=               # vision-capable model id — set explicitly, do not hardcode a default
 MAX_PARALLEL_WORKERS=8      # raise only after confirming the Daytona org concurrency limit
@@ -55,7 +55,7 @@ REVIEW      dashboard → GET /briefs/{id} + GET /recordings/{id}/video
             → speedrun replay, user edits → PATCH /briefs/{id}
 
 EXECUTE     dashboard → POST /runs (brief_id + rows)
-            → server creates one sandbox per row from OWARI_SNAPSHOT_NAME
+            → server creates one sandbox per row from CREWMATE_SNAPSHOT_NAME
             → per worker: for each step, find_nodes(role, name) → invoke/set/press
             → screenshots + status streamed to dashboard over SSE
 ```
@@ -100,7 +100,7 @@ Only Claude Code #1 needs the Daytona documentation. Give it `docs/en/computer-u
 ## Directory structure
 
 ```
-owari/
+crewmate/
 ├── CLAUDE.md                     # agent operating manual (root — auto-loaded)
 ├── .env                          # never committed
 ├── docs/
@@ -167,14 +167,14 @@ owari/
   - `sandbox.computer_use.accessibility.invoke_node(id, action=)` / `focus_node(id)` / `set_node_value(id, value)`.
   - `sandbox.computer_use.keyboard.press(key, modifiers)` / `.hotkey(keys)` / `.type(text, delay)`.
   - `sandbox.computer_use.screenshot.take_compressed(ScreenshotOptions(fmt="jpeg", quality=60, scale=0.4))` — grid tiles. Never take full-resolution screenshots on the polling path. The field is `fmt`, **not** `format`; `format` raises a pydantic validation error. Verified against the installed SDK on 2026-08-30.
-  - `sandbox.create_snapshot(name, timeout=60)` — captures a running sandbox's filesystem into a reusable snapshot. This is how the hand-provisioned, logged-in machine becomes `OWARI_SNAPSHOT_NAME`.
+  - `sandbox.create_snapshot(name, timeout=60)` — captures a running sandbox's filesystem into a reusable snapshot. This is how the hand-provisioned, logged-in machine becomes `CREWMATE_SNAPSHOT_NAME`.
   - `daytona.create(CreateSandboxFromSnapshotParams(snapshot=..., env_vars=..., ephemeral=True, auto_delete_interval=0))` — **this is the per-row fork.** Called once per input row.
   - `sandbox.delete()` — teardown. `ephemeral=True` with `auto_delete_interval=0` is the safety net for a crashed run.
-  - **`sandbox.fork()` is not used.** It exists in the SDK but is supported for VM sandboxes only, and Owari runs container sandboxes. Verified against the Daytona docs and the installed SDK on 2026-08-30; supersedes the earlier unverified assumption in D13.
+  - **`sandbox.fork()` is not used.** It exists in the SDK but is supported for VM sandboxes only, and Crewmate runs container sandboxes. Verified against the Daytona docs and the installed SDK on 2026-08-30; supersedes the earlier unverified assumption in D13.
 - **Display:** Xvfb runs on `:0` inside the sandbox — not `:1`. Anything launched onto the desktop from a shell must set `DISPLAY=:0`.
 - **Chromium accessibility (three requirements, all mandatory):** a browser in the sandbox exposes nothing to `find_nodes` unless all three hold. (a) `--force-renderer-accessibility` — Chromium builds its tree lazily and publishes only the window title without it. (b) `DBUS_SESSION_BUS_ADDRESS` must be in the environment — AT-SPI is carried over D-Bus; xfce autostart inherits it, a plain shell does not. (c) the profile lock must be cleared (below). Verified in a live sandbox on 2026-08-30: with all three, `find_nodes(role="link", name="Leads")` returns a real node id; with any one missing it returns nothing.
 - **Browser profile locks:** a snapshot of a machine with Chromium running captures the profile's `Singleton*` lock files, which name the machine that created them. Every sandbox booting from that snapshot inherits a lock belonging to a machine that no longer exists, and Chromium refuses to start. The launcher removes `SingletonLock`, `SingletonSocket` and `SingletonCookie` before starting. Cookies — and therefore the baked-in login — live elsewhere in the profile and are untouched.
-- **Resolution:** the virtual desktop defaults to `1024x768`. Owari fixes it at `1280x800` by passing `VNC_RESOLUTION` in `env_vars` on **every** sandbox creation — the Phase 0 provisioning sandbox and each per-row worker alike. It cannot be changed on a running sandbox.
+- **Resolution:** the virtual desktop defaults to `1024x768`. Crewmate fixes it at `1280x800` by passing `VNC_RESOLUTION` in `env_vars` on **every** sandbox creation — the Phase 0 provisioning sandbox and each per-row worker alike. It cannot be changed on a running sandbox.
 - **Resources:** CPU, memory and disk are inherited from the snapshot and **cannot be overridden per worker** — `CreateSandboxFromSnapshotParams` exposes no resource fields. Whatever the snapshot was built with is what all workers get.
 - **Image:** Computer Use requires the Daytona default sandbox image. A bare OS image (for example `ubuntu:22.04`) has no Xvfb, xfce4, x11vnc or novnc, so `computer_use.start()` has nothing to start and `find_nodes` never returns a node.
 - **Failure behaviour:** fork failure fails that worker only and is surfaced in its tile. A failure to reach the Daytona API at all fails the whole run immediately with a real error — never silently degrade to fewer workers than requested.

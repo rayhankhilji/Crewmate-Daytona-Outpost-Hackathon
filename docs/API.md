@@ -1,4 +1,4 @@
-# API: Owari
+# API: Crewmate
 
 > Endpoint contracts. Data shapes reference DATA_MODEL.md; module boundaries are in ARCHITECTURE.md.
 > This is the interface the three agents build against independently — it is frozen alongside `contract/`.

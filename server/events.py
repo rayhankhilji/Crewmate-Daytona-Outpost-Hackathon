@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger("owari.server.events")
+logger = logging.getLogger("crewmate.server.events")
 
 # Bounded so one stalled reader cannot grow without limit — worker events carry base64
 # screenshots. On overflow the oldest event is dropped: this is a live status feed, the

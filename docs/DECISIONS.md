@@ -1,4 +1,4 @@
-# Decisions Log: Owari
+# Decisions Log: Crewmate
 
 > Append-only record of non-obvious decisions and why. The agent adds an entry whenever it makes
 > a call that a future reader might otherwise second-guess. Never delete entries; supersede them
@@ -14,7 +14,7 @@ Entries marked **ASSUMPTION** were made without explicit confirmation from Rayha
 
 ### D1 — Record on the Mac, execute on a hand-provisioned sandbox
 - **Date:** 2026-08-30
-- **Decision:** The user records on their own machine. Execution happens on a Daytona sandbox provisioned by hand in advance, with logins already performed and captured in a snapshot. The Brief declares its environment as text only; Owari does not infer or build the environment.
+- **Decision:** The user records on their own machine. Execution happens on a Daytona sandbox provisioned by hand in advance, with logins already performed and captured in a snapshot. The Brief declares its environment as text only; Crewmate does not infer or build the environment.
 - **Rationale:** Recording locally is the product experience worth having. Automatically reconstructing the recorded machine in the cloud is an unsolved research problem and cannot be in the critical path of a one-day build. Declaring the environment explicitly turns the gap into a visible product surface rather than a hidden failure.
 - **Rejected:** (a) recording inside the sandbox over VNC — safer to build but loses the "on my own Mac" moment; (b) full environment inference — correct long-term, not buildable today.
 - **Status:** accepted
@@ -71,7 +71,7 @@ Entries marked **ASSUMPTION** were made without explicit confirmation from Rayha
 ### D9 — **ASSUMPTION** — the demo workflow is deliberately unspecified
 - **Date:** 2026-08-30
 - **Decision:** No specific workflow is named anywhere in the build. The workflow is data — a Brief — and `contract/example-brief.json` is a generic placeholder fixture.
-- **Rationale:** Owari must automate anything from watching; hardcoding a workflow into the system would be a design error. The demo workflow is chosen separately and only needs to satisfy the constraints in D10.
+- **Rationale:** Crewmate must automate anything from watching; hardcoding a workflow into the system would be a design error. The demo workflow is chosen separately and only needs to satisfy the constraints in D10.
 - **Rejected:** naming a vertical in the docs — would leak demo choices into product code.
 - **Status:** accepted
 

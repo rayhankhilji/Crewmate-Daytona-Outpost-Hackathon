@@ -1,4 +1,4 @@
-# PRD: Owari
+# PRD: Crewmate
 
 > Product definition. What is being built and what "done" means per feature.
 > Owns: problem, user, scope, features, acceptance. For how it's built see ARCHITECTURE.md;
@@ -8,13 +8,13 @@
 
 Operations work is trapped in software that has no API and never will — legacy portals, internal admin panels, desktop line-of-business apps. The only way to automate it today is to write brittle scripts against pixel coordinates, or to hire a person to do it by hand, one row at a time. Existing RPA tools require weeks of configuration by a specialist before a single task runs.
 
-Owari removes the configuration step entirely. A person demonstrates the task once, on their own machine, and Owari works out what they were trying to do.
+Crewmate removes the configuration step entirely. A person demonstrates the task once, on their own machine, and Crewmate works out what they were trying to do.
 
 ## 2. Target user & core action
 
 **User:** An operations person who does the same multi-step task repeatedly across software that cannot be scripted.
 
-**Core action:** Record yourself doing a task once, review the breakdown Owari produces, and launch it against many rows of input at the same time.
+**Core action:** Record yourself doing a task once, review the breakdown Crewmate produces, and launch it against many rows of input at the same time.
 
 ## 3. Scope
 
@@ -28,8 +28,8 @@ Owari removes the configuration step entirely. A person demonstrates the task on
 - Live run view showing every worker's screen and status, and a final results table.
 
 **Explicitly out of scope:**
-- Automatic environment inference. Owari does **not** work out which apps and logins a workflow needs. The execution sandbox is provisioned by hand in advance and referenced by snapshot name. The Brief declares its environment requirements as text only.
-- Credential capture, credential storage, or automated login. Logins are performed by a human once, inside the sandbox, before the snapshot is taken. Owari never handles a password.
+- Automatic environment inference. Crewmate does **not** work out which apps and logins a workflow needs. The execution sandbox is provisioned by hand in advance and referenced by snapshot name. The Brief declares its environment requirements as text only.
+- Credential capture, credential storage, or automated login. Logins are performed by a human once, inside the sandbox, before the snapshot is taken. Crewmate never handles a password.
 - Scheduling, triggers, cron, or any unattended recurring execution.
 - Multi-user accounts, teams, permissions, billing.
 - Recording anything other than the primary display.
@@ -68,7 +68,7 @@ Failure case: if a step's target cannot be found, the worker captures a screensh
 While a run is in progress, the dashboard shows a tile per worker with a live screenshot, its current step, and its status. Workers that take a conditional branch and finish early are visibly distinct from workers that fail. When the run completes, a results table lists every row with its outcome and the step it reached.
 
 ### F7 — Environment declaration
-Comprehension emits the environment the workflow requires as a list of human-readable strings. The dashboard displays these before launch alongside the configured snapshot name, so the user can confirm the execution environment matches what they demonstrated. This is a display and confirmation surface only — Owari does not provision it.
+Comprehension emits the environment the workflow requires as a list of human-readable strings. The dashboard displays these before launch alongside the configured snapshot name, so the user can confirm the execution environment matches what they demonstrated. This is a display and confirmation surface only — Crewmate does not provision it.
 
 ## 5. Acceptance criteria
 

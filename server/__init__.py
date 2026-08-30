@@ -1,1 +1,1 @@
-"""Owari server package."""
+"""Crewmate server package."""

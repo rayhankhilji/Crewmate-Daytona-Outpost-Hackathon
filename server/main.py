@@ -35,7 +35,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Owari",
+    title="Crewmate",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,

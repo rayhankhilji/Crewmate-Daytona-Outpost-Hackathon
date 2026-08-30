@@ -8,11 +8,11 @@ __pycache__/
 *.py[cod]
 .ruff_cache/
 
-# Owari runtime state
+# Crewmate runtime state
 server/storage/
-server/owari.db
-server/owari.db-wal
-server/owari.db-shm
+server/crewmate.db
+server/crewmate.db-wal
+server/crewmate.db-shm
 
 # Node
 node_modules/
@@ -22,3 +22,9 @@ out/
 
 # macOS
 .DS_Store
+
+# Internal build scaffolding — not part of the product
+CLAUDE.md
+START_HERE.md
+agents/
+docs/BUILD_PLAN.md

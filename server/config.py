@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = PROJECT_ROOT / ".env"
 STORAGE_ROOT = PROJECT_ROOT / "server" / "storage"
 RECORDINGS_DIR = STORAGE_ROOT / "recordings"
-DATABASE_PATH = PROJECT_ROOT / "server" / "owari.db"
+DATABASE_PATH = PROJECT_ROOT / "server" / "crewmate.db"
 
 
 class ConfigError(RuntimeError):
@@ -61,7 +61,7 @@ class Config:
 
     def require_snapshot_name(self) -> str:
         if not self.snapshot_name:
-            raise ConfigError("OWARI_SNAPSHOT_NAME is not set in .env")
+            raise ConfigError("CREWMATE_SNAPSHOT_NAME is not set in .env")
         return self.snapshot_name
 
     def require_vision_model(self) -> str:
@@ -74,7 +74,7 @@ def _build() -> Config:
     _load_env_file(ENV_PATH)
     return Config(
         daytona_api_key=os.environ.get("DAYTONA_API_KEY", "").strip(),
-        snapshot_name=os.environ.get("OWARI_SNAPSHOT_NAME", "").strip(),
+        snapshot_name=os.environ.get("CREWMATE_SNAPSHOT_NAME", "").strip(),
         vision_model=os.environ.get("VISION_MODEL", "").strip(),
         max_parallel_workers=_read_int("MAX_PARALLEL_WORKERS", 8),
     )

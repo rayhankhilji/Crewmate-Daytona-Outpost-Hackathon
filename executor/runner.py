@@ -35,7 +35,7 @@ from executor.grounding import (
     resolve_target,
 )
 
-logger = logging.getLogger("owari.executor.runner")
+logger = logging.getLogger("crewmate.executor.runner")
 
 SCREENSHOT_INTERVAL_SECONDS = 2.5
 SCREENSHOT_TIMEOUT_SECONDS = 30.0
@@ -118,7 +118,7 @@ class _ScreenshotPump:
         self._reporter = reporter
         self._stop = threading.Event()
         self._thread = threading.Thread(
-            target=self._loop, daemon=True, name="owari-screenshots"
+            target=self._loop, daemon=True, name="crewmate-screenshots"
         )
 
     def __enter__(self) -> Self:

@@ -18,7 +18,7 @@ from daytona import DaytonaError, Sandbox
 
 from executor.grounding import GroundedNode, describe, resolve_target, wait_for_target
 
-logger = logging.getLogger("owari.executor.actions")
+logger = logging.getLogger("crewmate.executor.actions")
 
 ACTION_TIMEOUT_SECONDS = 25.0
 # How long `wait_for` polls before giving up. Long enough for a page load, short enough that

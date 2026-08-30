@@ -1,4 +1,4 @@
--- Owari schema. Derived from docs/DATA_MODEL.md — that file is the source of truth.
+-- Crewmate schema. Derived from docs/DATA_MODEL.md — that file is the source of truth.
 -- Ids are uuid4 strings. Timestamps are ISO-8601 UTC strings. JSON columns are TEXT.
 
 PRAGMA foreign_keys = ON;

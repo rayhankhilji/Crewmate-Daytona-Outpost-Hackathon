@@ -16,7 +16,7 @@ from server.config import PROJECT_ROOT, RECORDINGS_DIR, config
 from server.errors import ApiError
 from server.events import broadcaster
 
-logger = logging.getLogger("owari.server.recordings")
+logger = logging.getLogger("crewmate.server.recordings")
 
 router = APIRouter()
 
@@ -212,7 +212,7 @@ async def comprehend(recording_id: str) -> JSONResponse:
     threading.Thread(
         target=_comprehend,
         args=(started,),
-        name=f"owari-comprehend-{recording_id[:8]}",
+        name=f"crewmate-comprehend-{recording_id[:8]}",
         daemon=True,
     ).start()
 

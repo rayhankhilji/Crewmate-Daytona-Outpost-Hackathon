@@ -88,7 +88,7 @@ async def create_run(request: RunRequest) -> JSONResponse:
     snapshot = config.snapshot_name
     if not snapshot:
         raise ApiError(
-            500, "snapshot_not_configured", "OWARI_SNAPSHOT_NAME is not set."
+            500, "snapshot_not_configured", "CREWMATE_SNAPSHOT_NAME is not set."
         )
     if not await run_in_threadpool(check_reachable, config.daytona_api_key):
         raise ApiError(

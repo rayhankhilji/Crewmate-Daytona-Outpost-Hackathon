@@ -1,7 +1,7 @@
 """Worker sandbox lifecycle: snapshot in, N running desktops out, every one torn down.
 
-"Fork" in Owari means creating a sandbox from `OWARI_SNAPSHOT_NAME`, not the SDK's
-`sandbox.fork()` — that method is supported for VM sandboxes only and Owari runs container
+"Fork" in Crewmate means creating a sandbox from `CREWMATE_SNAPSHOT_NAME`, not the SDK's
+`sandbox.fork()` — that method is supported for VM sandboxes only and Crewmate runs container
 sandboxes. See the Daytona section of docs/ARCHITECTURE.md.
 
 The teardown guarantee is the point of this module. A leaked sandbox burns real credits, so
@@ -22,7 +22,7 @@ from daytona import CreateSandboxFromSnapshotParams, Daytona, DaytonaError, Sand
 
 from executor.daytona_client import DaytonaUnavailableError, get_client
 
-logger = logging.getLogger("owari.executor.fork")
+logger = logging.getLogger("crewmate.executor.fork")
 
 # The desktop resolution every worker runs at. Set on creation because it cannot be changed
 # on a running sandbox, and the accessibility tree is what we act on, not pixels — but the
@@ -54,7 +54,7 @@ def _create_one(client: Daytona, snapshot_name: str, row_index: int) -> Sandbox:
     params = CreateSandboxFromSnapshotParams(
         snapshot=snapshot_name,
         env_vars={"VNC_RESOLUTION": VNC_RESOLUTION},
-        labels={"owari_row_index": str(row_index)},
+        labels={"crewmate_row_index": str(row_index)},
         ephemeral=True,
         auto_delete_interval=0,
     )
@@ -100,7 +100,7 @@ def worker_sandboxes(
     if count < 1:
         raise ForkError(f"A run needs at least one worker, got {count}")
     if not snapshot_name:
-        raise ForkError("OWARI_SNAPSHOT_NAME is not set in .env")
+        raise ForkError("CREWMATE_SNAPSHOT_NAME is not set in .env")
 
     client = get_client(api_key)
     workers: list[WorkerSandbox] = []

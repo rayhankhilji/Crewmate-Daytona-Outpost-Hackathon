@@ -20,7 +20,7 @@ from executor.runner import WorkerOutcome, run_worker
 from server import db
 from server.events import broadcaster
 
-logger = logging.getLogger("owari.server.runs")
+logger = logging.getLogger("crewmate.server.runs")
 
 
 class _Reporter:
@@ -146,7 +146,7 @@ def _execute(run_id: str, brief: dict[str, Any], api_key: str, snapshot: str) ->
                 threading.Thread(
                     target=_run_one,
                     args=(run_id, brief, slot, worker),
-                    name=f"owari-worker-{worker.row_index}",
+                    name=f"crewmate-worker-{worker.row_index}",
                     daemon=True,
                 )
                 for slot, worker in zip(slots, workers, strict=True)
@@ -197,6 +197,6 @@ def start_run(run_id: str, brief: dict[str, Any], api_key: str, snapshot: str) -
     threading.Thread(
         target=_execute,
         args=(run_id, brief, api_key, snapshot),
-        name=f"owari-run-{run_id[:8]}",
+        name=f"crewmate-run-{run_id[:8]}",
         daemon=True,
     ).start()

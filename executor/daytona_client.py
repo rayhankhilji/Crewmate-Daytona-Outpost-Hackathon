@@ -10,7 +10,7 @@ import logging
 
 from daytona import Daytona, DaytonaConfig, DaytonaError, ListSandboxesQuery
 
-logger = logging.getLogger("owari.executor")
+logger = logging.getLogger("crewmate.executor")
 
 REACHABILITY_TIMEOUT_SECONDS = 5.0
 
