@@ -33,6 +33,7 @@ from executor.grounding import (
     NodeNotFoundError,
     describe,
     resolve_target,
+    visible_candidates,
 )
 
 logger = logging.getLogger("crewmate.executor.runner")
@@ -46,6 +47,31 @@ RETRY_PAUSE_SECONDS = 1.5
 # The one definition of a variable reference, shared with the validator so that what
 # validation accepts and what execution substitutes can never diverge.
 from server.brief_schema import VARIABLE_REFERENCE
+
+
+class StepRecovery(Protocol):
+    """Asked to repair a failed step by looking at what is actually on screen.
+
+    The deterministic plan handles the normal case. This is the escape hatch for when it
+    does not match reality — a control that was renamed, a page that had not finished
+    rendering, a target the model described from pixels and got slightly wrong.
+
+    DECISIONS.md D3 permits exactly this: the vision model at comprehension time and on
+    failure retry, never per step on the happy path. A run where nothing fails makes no
+    model calls at all and stays as fast and repeatable as before.
+
+    Implementations live outside `executor/` — the executor may not import a model SDK — and
+    are injected by the server, which owns that seam.
+    """
+
+    def __call__(
+        self,
+        step: dict[str, Any],
+        error: str,
+        screenshot_base64: str | None,
+        candidates: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Return a replacement `target` dict for this step, or None to give up."""
 
 
 class SubstitutionError(RuntimeError):
@@ -116,6 +142,7 @@ class _ScreenshotPump:
     def __init__(self, sandbox: Sandbox, reporter: WorkerReporter) -> None:
         self._sandbox = sandbox
         self._reporter = reporter
+        self._last: str | None = None
         self._stop = threading.Event()
         self._thread = threading.Thread(
             target=self._loop, daemon=True, name="crewmate-screenshots"
@@ -129,6 +156,10 @@ class _ScreenshotPump:
         self._stop.set()
         self._thread.join(timeout=SCREENSHOT_TIMEOUT_SECONDS)
 
+    def last_frame(self) -> str | None:
+        """The most recent frame, so a recoverer can be shown what the worker sees."""
+        return self._last
+
     def capture_once(self) -> None:
         try:
             shot = self._sandbox.computer_use.screenshot.take_compressed(
@@ -139,6 +170,7 @@ class _ScreenshotPump:
             return
         data = getattr(shot, "screenshot", None) or getattr(shot, "data", None)
         if isinstance(data, str) and data:
+            self._last = data
             self._reporter.screenshot(data)
 
     def _loop(self) -> None:
@@ -161,15 +193,42 @@ def _condition_holds(sandbox: Sandbox, step: dict[str, Any]) -> bool:
 
 
 def _perform_with_one_retry(
-    sandbox: Sandbox, step: dict[str, Any], value: str | None
+    sandbox: Sandbox,
+    step: dict[str, Any],
+    value: str | None,
+    recover: StepRecovery | None,
+    frames: _ScreenshotPump,
 ) -> tuple[GroundedNode | None, bool]:
-    """Perform a step, retrying once if the target was not found. Returns (node, retried)."""
+    """Perform a step. On failure, retry once — and if a recoverer is available, retry
+    against a target it chose by looking at the screen rather than the same one again.
+
+    Returns (node, recovered) where `recovered` marks the step `retried` in the results.
+    """
     try:
         return perform(sandbox, step["action"], step["target"], value), False
-    except NodeNotFoundError:
-        logger.info("Target not found for step %s; retrying once", step["id"])
+    except (GroundingError, ActionError) as first:
+        logger.info("Step %s failed (%s); retrying", step["id"], first)
         time.sleep(RETRY_PAUSE_SECONDS)
-        return perform(sandbox, step["action"], step["target"], value), True
+
+        if recover is None:
+            return perform(sandbox, step["action"], step["target"], value), True
+
+        candidates = visible_candidates(sandbox)
+        replacement = recover(step, str(first), frames.last_frame(), candidates)
+        if replacement is None:
+            logger.info(
+                "Recovery declined for step %s; retrying the original target",
+                step["id"],
+            )
+            return perform(sandbox, step["action"], step["target"], value), True
+
+        logger.info(
+            "Recovered step %s: %s -> %s",
+            step["id"],
+            describe(step["target"]),
+            describe(replacement),
+        )
+        return perform(sandbox, step["action"], replacement, value), True
 
 
 def run_worker(
@@ -177,8 +236,13 @@ def run_worker(
     brief: dict[str, Any],
     row: dict[str, Any],
     reporter: WorkerReporter,
+    recover: StepRecovery | None = None,
 ) -> WorkerOutcome:
-    """Execute every step of a Brief against one sandbox with one input row."""
+    """Execute every step of a Brief against one sandbox with one input row.
+
+    `recover` is optional. Without it the runner is purely deterministic, exactly as before.
+    With it, a failed step gets one attempt at a target chosen by looking at the screen.
+    """
     steps: list[dict[str, Any]] = brief["steps"]
     variables: list[dict[str, Any]] = brief["variables"]
     completed = 0
@@ -205,7 +269,9 @@ def run_worker(
 
             try:
                 value = resolve_value(step["value"], row, variables)
-                node, retried = _perform_with_one_retry(sandbox, step, value)
+                node, retried = _perform_with_one_retry(
+                    sandbox, step, value, recover, frames
+                )
             except (
                 # GroundingError is the parent of NodeNotFoundError, and catches the cases
                 # where the accessibility API itself refused the query. Those must be

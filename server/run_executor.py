@@ -16,7 +16,7 @@ import threading
 from typing import Any
 
 from executor.fork import ForkError, WorkerSandbox, worker_sandboxes
-from executor.runner import WorkerOutcome, run_worker
+from executor.runner import StepRecovery, WorkerOutcome, run_worker
 from server import db
 from server.events import broadcaster
 
@@ -117,14 +117,57 @@ def _finish_worker(run_id: str, worker: db.Worker, outcome: WorkerOutcome) -> No
     )
 
 
+def _build_recoverer() -> StepRecovery | None:
+    """Hand the executor a way to repair a failed step, if comprehension provides one.
+
+    The executor may not import a model SDK and the server may not prompt a model directly,
+    so this is the seam between them: comprehension owns the prompt, the server owns the
+    wiring, the executor decides when to ask. Returns None when comprehension has not
+    shipped the function, in which case execution stays purely deterministic.
+    """
+    try:
+        from comprehension.recover import recover_step
+    except ImportError:
+        logger.info("No step recovery available; execution is fully deterministic")
+        return None
+
+    def recover(
+        step: dict[str, Any],
+        error: str,
+        screenshot_base64: str | None,
+        candidates: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        try:
+            return recover_step(
+                step=step,
+                error=error,
+                screenshot_base64=screenshot_base64,
+                candidates=candidates,
+            )
+        except Exception:  # recovery failing must never fail the worker
+            logger.exception("Step recovery raised; falling back to a plain retry")
+            return None
+
+    logger.info("Step recovery is available")
+    return recover
+
+
 def _run_one(
-    run_id: str, brief: dict[str, Any], slot: WorkerSandbox, worker: db.Worker
+    run_id: str,
+    brief: dict[str, Any],
+    slot: WorkerSandbox,
+    worker: db.Worker,
+    recover: StepRecovery | None = None,
 ) -> None:
     """One worker, start to finish. Never raises — a worker's failure is its own."""
     try:
         db.set_worker_sandbox(worker.id, slot.sandbox_id)
         outcome = run_worker(
-            slot.sandbox, brief, worker.row_data, _Reporter(run_id, worker)
+            slot.sandbox,
+            brief,
+            worker.row_data,
+            _Reporter(run_id, worker),
+            recover=recover,
         )
     except Exception as exc:
         logger.exception("Worker %d crashed", worker.row_index)
@@ -137,6 +180,7 @@ def _run_one(
 def _execute(run_id: str, brief: dict[str, Any], api_key: str, snapshot: str) -> None:
     """Provision every sandbox, run all workers in parallel, then tear everything down."""
     workers = db.list_workers(run_id)
+    recover = _build_recoverer()
     db.mark_run_started(run_id)
     broadcaster.publish(run_id, "run", {"status": "running", "finished_at": None})
 
@@ -145,7 +189,7 @@ def _execute(run_id: str, brief: dict[str, Any], api_key: str, snapshot: str) ->
             threads = [
                 threading.Thread(
                     target=_run_one,
-                    args=(run_id, brief, slot, worker),
+                    args=(run_id, brief, slot, worker, recover),
                     name=f"crewmate-worker-{worker.row_index}",
                     daemon=True,
                 )

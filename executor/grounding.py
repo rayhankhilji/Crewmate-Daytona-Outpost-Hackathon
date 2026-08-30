@@ -92,18 +92,40 @@ _CONTAINER_ROLES = frozenset(
     {"table cell", "section", "panel", "filler", "list item", "static"}
 )
 
+# The desktop and the browser's own furniture. These are legitimate targets for a workflow
+# that really does use them, so they are never excluded — but when a page control and a piece
+# of browser chrome both match a name, the page is what the recording meant.
+_CHROME_ROLES = frozenset(
+    {"toggle button", "menu item", "menu", "tool bar", "frame", "window"}
+)
 
-def _rank(match: Any, wanted_role: str) -> tuple[int, int]:
-    """Rank a candidate: exact role first, then a real control, then anything else."""
+
+def _rank(match: Any, wanted_role: str, wanted_name: str) -> tuple[int, int, int, int]:
+    """Order candidates so the closest, most page-like, most actionable match wins.
+
+    The first component matters most and was learned from a live failure: a step looking for
+    a control named "Open" under a substring match found Chrome's "Open tab in split view"
+    menu item and clicked it. An exact name match must always beat a longer superstring, or
+    substring matching turns a precise target into a lucky dip.
+    """
     role = (getattr(match, "role", "") or "").lower()
+    name = (getattr(match, "name", "") or "").strip()
     wanted = wanted_role.lower()
+
+    exactness = 0 if name.casefold() == wanted_name.casefold() else 1
+    chrome = 1 if role in _CHROME_ROLES else 0
+
     if role == wanted:
-        return (0, 0)
-    if role and wanted and (role in wanted or wanted in role):
-        return (1, 0)
-    if role in _CONTAINER_ROLES:
-        return (3, 0)
-    return (2, 0)
+        role_rank = 0
+    elif role and wanted and (role in wanted or wanted in role):
+        role_rank = 1
+    elif role in _CONTAINER_ROLES:
+        role_rank = 3
+    else:
+        role_rank = 2
+
+    # Among equally-ranked candidates, the shortest name is the tightest match.
+    return (exactness, chrome, role_rank, len(name))
 
 
 def resolve_target(sandbox: Sandbox, target: dict[str, Any]) -> GroundedNode:
@@ -153,7 +175,7 @@ def resolve_target(sandbox: Sandbox, target: dict[str, Any]) -> GroundedNode:
     if not matches:
         raise NodeNotFoundError(f"No node on screen matches {describe(target)}")
 
-    ranked = sorted(matches, key=lambda m: _rank(m, role))
+    ranked = sorted(matches, key=lambda m: _rank(m, role, name))
     best = ranked[0]
     best_role = (getattr(best, "role", "") or "").lower()
     if role and best_role != role.lower():
@@ -165,6 +187,32 @@ def resolve_target(sandbox: Sandbox, target: dict[str, Any]) -> GroundedNode:
     if len(matches) > 1:
         logger.info("%d nodes are named %r; using the best-ranked", len(matches), name)
     return _to_node(best, len(matches))
+
+
+def visible_candidates(sandbox: Sandbox, limit: int = 40) -> list[dict[str, Any]]:
+    """Every named control on screen right now, as plain dicts.
+
+    This is the evidence handed to the recovery model when a step fails: what the worker can
+    actually see, in the same role/name vocabulary a Brief target uses. Bounds are not
+    included — a recovered target is still semantic.
+    """
+    try:
+        response = sandbox.computer_use.accessibility.find_nodes(
+            scope=DEFAULT_SCOPE, limit=limit, request_timeout=FIND_TIMEOUT_SECONDS
+        )
+    except DaytonaError as exc:
+        logger.warning("Could not read the screen for recovery: %s", exc)
+        return []
+    seen: set[tuple[str, str]] = set()
+    candidates: list[dict[str, Any]] = []
+    for match in response.matches or ():
+        role = (getattr(match, "role", "") or "").strip()
+        name = (getattr(match, "name", "") or "").strip()
+        if not name or (role, name) in seen:
+            continue
+        seen.add((role, name))
+        candidates.append({"role": role, "name": name})
+    return candidates
 
 
 def wait_for_target(

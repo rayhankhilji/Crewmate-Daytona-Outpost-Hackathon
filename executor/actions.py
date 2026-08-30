@@ -23,9 +23,37 @@ logger = logging.getLogger("crewmate.executor.actions")
 ACTION_TIMEOUT_SECONDS = 25.0
 # How long `wait_for` polls before giving up. Long enough for a page load, short enough that
 # a worker stuck on a step fails inside a demo rather than hanging the run.
-WAIT_FOR_TIMEOUT_SECONDS = 25.0
+WAIT_FOR_TIMEOUT_SECONDS = 45.0
 # Typing is per-character; a small delay keeps fast web inputs from dropping characters.
 TYPE_DELAY_MS = 12
+
+# Recordings are made on a Mac and executed on Linux. Cmd does not exist there, and a Brief
+# that says "cmd+v" means "the paste shortcut", not "the key labelled cmd". Translating at
+# execution time is the same principle as re-grounding a target rather than replaying a
+# coordinate: the platform detail is not part of the intent.
+_MODIFIER_ALIASES = {
+    "cmd": "ctrl",
+    "command": "ctrl",
+    "meta": "ctrl",
+    "super": "ctrl",
+    "option": "alt",
+}
+
+
+def normalise_keys(value: str) -> str:
+    """Rewrite a recorded key combination for the platform the worker runs on."""
+    parts = [
+        part.strip().lower()
+        for part in value.replace("-", "+").split("+")
+        if part.strip()
+    ]
+    translated = [_MODIFIER_ALIASES.get(part, part) for part in parts]
+    # A chord can end up with the same modifier twice (cmd+ctrl+c); keep the first of each.
+    seen: list[str] = []
+    for part in translated:
+        if part not in seen:
+            seen.append(part)
+    return "+".join(seen)
 
 
 class ActionError(RuntimeError):
@@ -125,24 +153,28 @@ def press_key(sandbox: Sandbox, target: dict[str, Any], value: str | None) -> No
     """Press a single key. The key is carried in `value`; the target is empty."""
     if not value:
         raise ActionError("press_key requires a key in `value`, got null")
+    key = normalise_keys(value)
     try:
-        sandbox.computer_use.keyboard.press(
-            value, request_timeout=ACTION_TIMEOUT_SECONDS
-        )
+        sandbox.computer_use.keyboard.press(key, request_timeout=ACTION_TIMEOUT_SECONDS)
     except DaytonaError as exc:
-        raise ActionError(f"Could not press {value!r}: {exc}") from exc
+        raise ActionError(f"Could not press {key!r}: {exc}") from exc
 
 
 def hotkey(sandbox: Sandbox, target: dict[str, Any], value: str | None) -> None:
     """Press a key combination such as 'ctrl+s'. Carried in `value`; the target is empty."""
     if not value:
         raise ActionError("hotkey requires a combination in `value`, got null")
+    chord = normalise_keys(value)
+    if chord != value.strip().lower():
+        logger.info(
+            "Translated recorded chord %r to %r for this platform", value, chord
+        )
     try:
         sandbox.computer_use.keyboard.hotkey(
-            value, request_timeout=ACTION_TIMEOUT_SECONDS
+            chord, request_timeout=ACTION_TIMEOUT_SECONDS
         )
     except DaytonaError as exc:
-        raise ActionError(f"Could not press the combination {value!r}: {exc}") from exc
+        raise ActionError(f"Could not press the combination {chord!r}: {exc}") from exc
 
 
 def wait_for(
