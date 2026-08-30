@@ -38,10 +38,15 @@ from executor.grounding import (
 
 logger = logging.getLogger("crewmate.executor.runner")
 
-SCREENSHOT_INTERVAL_SECONDS = 2.5
+# The grid needs a frame at least every 3 seconds (API.md). Polling a little faster than
+# that keeps tiles current without a synchronous capture on the step path.
+SCREENSHOT_INTERVAL_SECONDS = 2.0
 SCREENSHOT_TIMEOUT_SECONDS = 30.0
 # Compressed, small. API.md forbids full-resolution screenshots on the polling path.
-SCREENSHOT_OPTIONS = ScreenshotOptions(fmt="jpeg", quality=60, scale=0.4)
+# 0.4/60 was unreadably soft on a 1280x800 desktop — text in a tile was not legible at
+# all. 0.6/72 is still well short of full resolution and roughly doubles the useful
+# detail for a modest size increase.
+SCREENSHOT_OPTIONS = ScreenshotOptions(fmt="jpeg", quality=72, scale=0.6)
 RETRY_PAUSE_SECONDS = 1.5
 
 # The one definition of a variable reference, shared with the validator so that what
@@ -264,6 +269,7 @@ def run_worker(
                 frames.capture_once()
                 if condition["else"] == "end_workflow":
                     logger.info("Step %s ended the workflow early", step_id)
+                    frames.capture_once()
                     return WorkerOutcome("skipped", completed, len(steps), reason)
                 continue
 
@@ -298,6 +304,7 @@ def run_worker(
                 node.as_record() if node is not None else None,
                 None,
             )
-            frames.capture_once()
+
+        frames.capture_once()
 
     return WorkerOutcome("complete", completed, len(steps))

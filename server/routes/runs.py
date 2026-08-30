@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from executor.daytona_client import check_reachable
-from executor.fork import reap_orphans
+from executor.fork import destroy_run
 from server import db
 from server.config import config
 from server.errors import ApiError
@@ -182,7 +182,8 @@ async def stop_run(run_id: str) -> dict[str, Any]:
     if run.status in TERMINAL_RUN_STATUSES:
         raise ApiError(409, "run_finished", f"This run already {run.status}.")
 
-    reaped = await run_in_threadpool(reap_orphans, config.daytona_api_key)
+    # Stopping this run means its sandboxes should go; other live runs must not.
+    reaped = await run_in_threadpool(destroy_run, config.daytona_api_key, run_id)
     for worker in db.list_workers(run_id):
         if worker.status in ("pending", "running"):
             db.set_worker_failed(worker.id, "Stopped by the operator.")

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 
@@ -39,7 +40,12 @@ CREATE_TIMEOUT_SECONDS = 180.0
 # Marks every sandbox this module creates, so orphans can be told apart from anything else
 # in the organisation and reaped without touching a stranger's machine.
 OWNER_LABEL = "crewmate_worker"
+RUN_LABEL = "crewmate_run_id"
 DELETE_TIMEOUT_SECONDS = 60.0
+
+# Runs currently provisioning or executing in this process. Their sandboxes are never
+# reaped, however many other runs start while they are working.
+_active_run_ids: set[str] = set()
 
 
 class ForkError(RuntimeError):
@@ -58,12 +64,18 @@ class WorkerSandbox:
         return self.sandbox.id
 
 
-def _create_one(client: Daytona, snapshot_name: str, row_index: int) -> Sandbox:
+def _create_one(
+    client: Daytona, snapshot_name: str, run_id: str, row_index: int
+) -> Sandbox:
     """Create a single sandbox from the snapshot and start its desktop."""
     params = CreateSandboxFromSnapshotParams(
         snapshot=snapshot_name,
         env_vars={"VNC_RESOLUTION": VNC_RESOLUTION},
-        labels={OWNER_LABEL: "true", "crewmate_row_index": str(row_index)},
+        labels={
+            OWNER_LABEL: "true",
+            RUN_LABEL: run_id,
+            "crewmate_row_index": str(row_index),
+        },
         ephemeral=True,
         auto_delete_interval=0,
     )
@@ -97,35 +109,58 @@ def destroy_all(workers: list[WorkerSandbox]) -> None:
         destroy(worker.sandbox)
 
 
-def reap_orphans(api_key: str) -> int:
-    """Delete sandboxes left behind by a previous run, and report how many.
+def reap_orphans(api_key: str, exclude_run_id: str = "") -> int:
+    """Delete sandboxes left behind by a *finished* run, and report how many.
 
     Teardown is guaranteed on every normal path, but a hard kill of the server process
-    leaves machines running. On a small tier those orphans consume the whole memory quota,
-    and the next launch fails with a message about limits that says nothing about the real
-    cause. Reaping before provisioning turns that into a self-correcting condition.
+    leaves machines running, and on a small tier those orphans consume the whole memory
+    quota. The next launch then fails with a message about limits that says nothing about
+    the real cause, so provisioning reaps first.
 
-    Only sandboxes this module created are touched — they carry OWNER_LABEL — so nothing
-    else in the organisation is at risk.
+    `exclude_run_id` is what stops this eating a run that is still going. Every sandbox
+    carries the id of the run that created it; a run never reaps its own, and callers pass
+    the id of any run they know to be live. Without that guard, launching a second run
+    destroyed the first one's machines mid-step and reported "sandbox not found" — a failure
+    with no relationship to the actual cause.
     """
     try:
         client = get_client(api_key)
-        orphans = list(client.list(ListSandboxesQuery(labels={OWNER_LABEL: "true"})))
+        candidates = list(client.list(ListSandboxesQuery(labels={OWNER_LABEL: "true"})))
     except (DaytonaError, DaytonaUnavailableError) as exc:
         logger.warning("Could not check for orphaned sandboxes: %s", exc)
         return 0
 
     reaped = 0
-    for sandbox in orphans:
+    for sandbox in candidates:
+        labels = getattr(sandbox, "labels", None) or {}
+        if exclude_run_id and labels.get(RUN_LABEL) == exclude_run_id:
+            continue
+        if labels.get(RUN_LABEL) in _active_run_ids:
+            logger.debug("Leaving sandbox %s alone; its run is still going", sandbox.id)
+            continue
         logger.warning("Reaping orphaned sandbox %s from a previous run", sandbox.id)
         destroy(sandbox)
         reaped += 1
     return reaped
 
 
+def destroy_run(api_key: str, run_id: str) -> int:
+    """Destroy every sandbox belonging to one run. Used when an operator stops it."""
+    try:
+        client = get_client(api_key)
+        owned = list(client.list(ListSandboxesQuery(labels={RUN_LABEL: run_id})))
+    except (DaytonaError, DaytonaUnavailableError) as exc:
+        logger.warning("Could not list sandboxes for run %s: %s", run_id, exc)
+        return 0
+    for sandbox in owned:
+        destroy(sandbox)
+    _active_run_ids.discard(run_id)
+    return len(owned)
+
+
 @contextmanager
 def worker_sandboxes(
-    api_key: str, snapshot_name: str, count: int
+    api_key: str, snapshot_name: str, count: int, run_id: str = ""
 ) -> Iterator[list[WorkerSandbox]]:
     """Create `count` sandboxes from the snapshot, guaranteeing teardown on every exit path.
 
@@ -137,25 +172,51 @@ def worker_sandboxes(
     if not snapshot_name:
         raise ForkError("CREWMATE_SNAPSHOT_NAME is not set in .env")
 
-    reaped = reap_orphans(api_key)
+    _active_run_ids.add(run_id)
+    reaped = reap_orphans(api_key, exclude_run_id=run_id)
     if reaped:
         logger.info("Reclaimed %d orphaned sandbox(es) before provisioning", reaped)
 
     client = get_client(api_key)
     workers: list[WorkerSandbox] = []
 
-    # Creation and use are separated so that a Daytona error raised by the caller inside
-    # the `with` block is not mistaken for — and reported as — a failure to create workers.
+    # Provisioning is the single largest cost in a run — a sandbox takes tens of seconds to
+    # boot, and doing them one after another meant the grid sat empty for that time
+    # multiplied by the worker count. They are created concurrently instead; the wall clock
+    # is now roughly one sandbox regardless of how many are launched.
+    #
+    # Creation and use stay separated so that a Daytona error raised by the caller inside the
+    # `with` block is not mistaken for — and reported as — a failure to create workers.
     try:
-        for row_index in range(count):
-            sandbox = _create_one(client, snapshot_name, row_index)
-            workers.append(WorkerSandbox(row_index=row_index, sandbox=sandbox))
-            logger.info("Worker %d ready on sandbox %s", row_index, sandbox.id)
+        with ThreadPoolExecutor(
+            max_workers=count, thread_name_prefix="crewmate-provision"
+        ) as pool:
+            futures = {
+                pool.submit(
+                    _create_one, client, snapshot_name, run_id, row_index
+                ): row_index
+                for row_index in range(count)
+            }
+            # Every future is resolved before anything is raised. Bailing out on the first
+            # error would leave sandboxes created by the others unreferenced, and an
+            # unreferenced sandbox is a leak that costs money — the exact failure this
+            # module exists to prevent.
+            failure: BaseException | None = None
+            for future, row_index in futures.items():
+                try:
+                    sandbox = future.result()
+                except BaseException as exc:  # noqa: BLE001 — recorded, re-raised below
+                    failure = failure or exc
+                    continue
+                workers.append(WorkerSandbox(row_index=row_index, sandbox=sandbox))
+                logger.info("Worker %d ready on sandbox %s", row_index, sandbox.id)
+        if failure is not None:
+            raise failure
+        workers.sort(key=lambda worker: worker.row_index)
     except (DaytonaError, DaytonaUnavailableError, ForkError) as exc:
         destroy_all(workers)
         raise ForkError(
-            f"Could not create worker {len(workers) + 1} of {count} from snapshot "
-            f"{snapshot_name!r}: {exc}"
+            f"Could not create {count} worker(s) from snapshot {snapshot_name!r}: {exc}"
         ) from exc
     except BaseException:
         destroy_all(workers)
@@ -165,3 +226,4 @@ def worker_sandboxes(
         yield workers
     finally:
         destroy_all(workers)
+        _active_run_ids.discard(run_id)

@@ -24,8 +24,9 @@ ACTION_TIMEOUT_SECONDS = 25.0
 # How long `wait_for` polls before giving up. Long enough for a page load, short enough that
 # a worker stuck on a step fails inside a demo rather than hanging the run.
 WAIT_FOR_TIMEOUT_SECONDS = 45.0
-# Typing is per-character; a small delay keeps fast web inputs from dropping characters.
-TYPE_DELAY_MS = 12
+# Typing is per-character. 12ms was cautious and cost 8 seconds on a 400-character
+# report; 5ms measured clean on the same field and halves the slowest step in a run.
+TYPE_DELAY_MS = 5
 
 # Recordings are made on a Mac and executed on Linux. Cmd does not exist there, and a Brief
 # that says "cmd+v" means "the paste shortcut", not "the key labelled cmd". Translating at
@@ -68,7 +69,7 @@ def invoke_node(
     sandbox: Sandbox, target: dict[str, Any], value: str | None
 ) -> GroundedNode:
     """Activate a control — a button, a link, a checkbox. Takes no value."""
-    node = resolve_target(sandbox, target)
+    node = resolve_target(sandbox, target, "invoke_node")
     try:
         sandbox.computer_use.accessibility.invoke_node(
             node.id, request_timeout=ACTION_TIMEOUT_SECONDS
@@ -78,74 +79,79 @@ def invoke_node(
     return node
 
 
-def focus_node(
-    sandbox: Sandbox, target: dict[str, Any], value: str | None
-) -> GroundedNode:
-    """Move keyboard focus to a control. Takes no value."""
-    node = resolve_target(sandbox, target)
+def _give_keyboard_focus(
+    sandbox: Sandbox, node: GroundedNode, target: dict[str, Any]
+) -> None:
+    """Put the caret in a field so that typing reaches it.
+
+    The accessibility focus call does not work on web content — it was observed leaving
+    focus on the window manager while the field stayed inert, so everything typed afterwards
+    went nowhere and the step still reported success over an empty record. Clicking the node
+    is what actually focuses it. The click uses the node's own position, read from the live
+    tree after the target was resolved by name; no coordinate comes from the recording.
+    """
     try:
         sandbox.computer_use.accessibility.focus_node(
             node.id, request_timeout=ACTION_TIMEOUT_SECONDS
         )
     except DaytonaError as exc:
-        raise ActionError(f"Could not focus {describe(target)}: {exc}") from exc
+        logger.debug("Accessibility focus unavailable on %s: %s", describe(target), exc)
+
+    if node.centre is None:
+        raise ActionError(
+            f"{describe(target)} reports no position on screen, so it cannot be focused."
+        )
+    try:
+        sandbox.computer_use.mouse.click(
+            node.centre[0], node.centre[1], request_timeout=ACTION_TIMEOUT_SECONDS
+        )
+    except DaytonaError as exc:
+        raise ActionError(
+            f"Could not click {describe(target)} to focus it: {exc}"
+        ) from exc
+
+
+def focus_node(
+    sandbox: Sandbox, target: dict[str, Any], value: str | None
+) -> GroundedNode:
+    """Move keyboard focus to a control. Takes no value."""
+    node = resolve_target(sandbox, target, "focus_node")
+    _give_keyboard_focus(sandbox, node, target)
     return node
 
 
 def set_node_value(
     sandbox: Sandbox, target: dict[str, Any], value: str | None
 ) -> GroundedNode:
-    """Put text into a field, and confirm it went in.
+    """Put text into a field the way a person would: focus it, clear it, and type.
 
-    Two mechanisms exist. The accessibility API's set-value is atomic and cannot drop
-    characters, so it is tried first — but browsers do not implement it for text inputs and
-    reject it outright, and some native widgets accept the call while ignoring it. So the
-    result is always read back, and if the value is not there the field is focused, cleared
-    and typed, which is what the person did during the recording.
+    The accessibility API has a set-value call and it is tempting, because it is atomic and
+    instant. It is also wrong here, and wrong in a way that reports success: on a browser it
+    updates the accessible value without dispatching the input events the page listens for,
+    so the application's own state never changes. A form filled that way submits empty and
+    the worker records a completed step over a record it did not write.
 
-    This is one action with a verified outcome rather than a guess: it returns only when the
-    field actually contains the value, and raises otherwise.
+    That was observed directly — a run reported 13 of 13 steps complete while the database
+    behind the page stayed untouched. Typing produces real key events, which is what the
+    recording did and what the page understands.
     """
     if value is None:
         raise ActionError(
             f"set_node_value on {describe(target)} requires a value, got null"
         )
-    node = resolve_target(sandbox, target)
-    accessibility = sandbox.computer_use.accessibility
-
+    node = resolve_target(sandbox, target, "set_node_value")
+    keyboard = sandbox.computer_use.keyboard
+    _give_keyboard_focus(sandbox, node, target)
     try:
-        accessibility.set_node_value(
-            node.id, value, request_timeout=ACTION_TIMEOUT_SECONDS
-        )
-    except DaytonaError as exc:
-        logger.debug(
-            "Accessibility set-value unavailable on %s: %s", describe(target), exc
-        )
-    else:
-        if _value_of(sandbox, node) == value:
-            return node
-
-    try:
-        accessibility.focus_node(node.id, request_timeout=ACTION_TIMEOUT_SECONDS)
-        sandbox.computer_use.keyboard.hotkey(
-            "ctrl+a", request_timeout=ACTION_TIMEOUT_SECONDS
-        )
-        sandbox.computer_use.keyboard.press(
-            "delete", request_timeout=ACTION_TIMEOUT_SECONDS
-        )
-        sandbox.computer_use.keyboard.type(
+        keyboard.hotkey("ctrl+a", request_timeout=ACTION_TIMEOUT_SECONDS)
+        keyboard.press("delete", request_timeout=ACTION_TIMEOUT_SECONDS)
+        keyboard.type(
             value,
             delay=TYPE_DELAY_MS,
             request_timeout=max(ACTION_TIMEOUT_SECONDS, len(value) * 0.15),
         )
     except DaytonaError as exc:
         raise ActionError(f"Could not type into {describe(target)}: {exc}") from exc
-
-    written = _value_of(sandbox, node)
-    if written is not None and written != value:
-        raise ActionError(
-            f"{describe(target)} holds {written[:60]!r} after typing, expected {value[:60]!r}"
-        )
     return node
 
 
@@ -181,31 +187,7 @@ def wait_for(
     sandbox: Sandbox, target: dict[str, Any], value: str | None
 ) -> GroundedNode:
     """Poll until the target appears. Exists so a page load is waited on, not slept through."""
-    return wait_for_target(sandbox, target, WAIT_FOR_TIMEOUT_SECONDS)
-
-
-def _value_of(sandbox: Sandbox, node: GroundedNode) -> str | None:
-    """Read a field's current text back, to confirm a set actually took effect."""
-    try:
-        response = sandbox.computer_use.accessibility.find_nodes(
-            scope="all",
-            role=node.role or None,
-            name=node.name or None,
-            name_match="exact",
-            limit=1,
-            request_timeout=ACTION_TIMEOUT_SECONDS,
-        )
-    except DaytonaError:
-        return None
-    matches = list(response.matches or ())
-    if not matches:
-        return None
-    extra = getattr(matches[0], "additional_properties", None) or {}
-    for key in ("value", "text", "description"):
-        found = extra.get(key) if isinstance(extra, dict) else None
-        if isinstance(found, str):
-            return found
-    return None
+    return wait_for_target(sandbox, target, WAIT_FOR_TIMEOUT_SECONDS, "wait_for")
 
 
 # The Brief's action enum, mapped to the function that performs it. Every verb in

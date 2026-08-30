@@ -44,7 +44,14 @@ class UngroundableTargetError(GroundingError):
 
 @dataclass(frozen=True)
 class GroundedNode:
-    """A node resolved at run time. Serialised into step_results.resolved_target."""
+    """A node resolved at run time. Serialised into step_results.resolved_target.
+
+    `centre` is where this node sits on screen *at this moment*, derived from the live
+    accessibility tree. That is not a violation of the no-coordinates rule: the rule exists
+    because a coordinate recorded on one machine is meaningless on another, and these are
+    read from the machine the worker is looking at, after the target was found by name. The
+    Brief still carries no coordinate and cannot.
+    """
 
     id: str
     role: str
@@ -52,6 +59,7 @@ class GroundedNode:
     actions: tuple[str, ...]
     states: tuple[str, ...]
     match_count: int
+    centre: tuple[int, int] | None = None
 
     def as_record(self) -> dict[str, Any]:
         return {
@@ -72,6 +80,21 @@ def describe(target: dict[str, Any]) -> str:
     return f"{role} named {name!r} ({match} match)"
 
 
+def _centre_of(match: Any) -> tuple[int, int] | None:
+    """Where the node is on screen right now, if the tree reports it."""
+    bounds = getattr(match, "bounds", None)
+    if bounds is None:
+        return None
+    try:
+        x, y = int(bounds.x), int(bounds.y)
+        width, height = int(bounds.width), int(bounds.height)
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if width <= 0 or height <= 0:
+        return None
+    return (x + width // 2, y + height // 2)
+
+
 def _to_node(match: Any, match_count: int) -> GroundedNode:
     node_id = getattr(match, "id", None)
     if not node_id:
@@ -83,34 +106,78 @@ def _to_node(match: Any, match_count: int) -> GroundedNode:
         actions=tuple(getattr(match, "actions", None) or ()),
         states=tuple(getattr(match, "states", None) or ()),
         match_count=match_count,
+        centre=_centre_of(match),
     )
 
 
 # Roles that describe a container the real control sits inside. A match on one of these is
 # accepted, but ranked below a match on the control itself.
-_CONTAINER_ROLES = frozenset(
-    {"table cell", "section", "panel", "filler", "list item", "static"}
-)
+_CONTAINER_ROLES = frozenset({"table cell", "section", "panel", "filler", "list item"})
 
-# The desktop and the browser's own furniture. These are legitimate targets for a workflow
-# that really does use them, so they are never excluded — but when a page control and a piece
-# of browser chrome both match a name, the page is what the recording meant.
+# The desktop and the browser's own furniture. Legitimate targets for a workflow that really
+# uses them, so never excluded — but when a page control and a piece of browser chrome share
+# a name, the page is what the recording meant.
 _CHROME_ROLES = frozenset(
     {"toggle button", "menu item", "menu", "tool bar", "frame", "window"}
 )
 
+# Text that describes a control rather than being one. A form field and its own <label> or
+# heading carry the same accessible name, so "Research notes" matches both the textarea and
+# the heading above it. Typing into the heading silently does nothing — the keystrokes go to
+# the window manager and the step still reports success. Which of the two is correct depends
+# entirely on what the step is trying to do.
+_STATIC_ROLES = frozenset(
+    {"heading", "label", "static", "paragraph", "text frame", "caption"}
+)
 
-def _rank(match: Any, wanted_role: str, wanted_name: str) -> tuple[int, int, int, int]:
-    """Order candidates so the closest, most page-like, most actionable match wins.
+# What each action needs a node to actually be capable of.
+_EDITABLE_ROLES = frozenset(
+    {"entry", "text", "textbox", "combo box", "spin button", "password text"}
+)
+_CLICKABLE_ROLES = frozenset(
+    {
+        "push button",
+        "button",
+        "link",
+        "check box",
+        "radio button",
+        "menu item",
+        "toggle button",
+        "tab",
+    }
+)
+_ACTION_ROLES: dict[str, frozenset[str]] = {
+    "set_node_value": _EDITABLE_ROLES,
+    "focus_node": _EDITABLE_ROLES,
+    "invoke_node": _CLICKABLE_ROLES,
+}
 
-    The first component matters most and was learned from a live failure: a step looking for
-    a control named "Open" under a substring match found Chrome's "Open tab in split view"
-    menu item and clicked it. An exact name match must always beat a longer superstring, or
-    substring matching turns a precise target into a lucky dip.
+
+def _rank(
+    match: Any, wanted_role: str, wanted_name: str, action: str
+) -> tuple[int, ...]:
+    """Order candidates: capable of the action, closest name, page over chrome, real control.
+
+    Capability comes first and was learned from a silent failure. A step typing into
+    `textbox "Research notes"` resolved to the *heading* with that name, because both matched
+    equally well. The keystrokes went nowhere, the step reported success, and the record was
+    saved empty — a green run that did no work. A node that cannot perform the action is now
+    ranked last whatever else it has going for it.
     """
     role = (getattr(match, "role", "") or "").lower()
     name = (getattr(match, "name", "") or "").strip()
     wanted = wanted_role.lower()
+
+    capable_roles = _ACTION_ROLES.get(action)
+    if capable_roles is None:
+        # wait_for and the keyboard verbs only care that something is there.
+        capability = 0
+    elif role in capable_roles:
+        capability = 0
+    elif role in _STATIC_ROLES:
+        capability = 2
+    else:
+        capability = 1
 
     exactness = 0 if name.casefold() == wanted_name.casefold() else 1
     chrome = 1 if role in _CHROME_ROLES else 0
@@ -124,11 +191,12 @@ def _rank(match: Any, wanted_role: str, wanted_name: str) -> tuple[int, int, int
     else:
         role_rank = 2
 
-    # Among equally-ranked candidates, the shortest name is the tightest match.
-    return (exactness, chrome, role_rank, len(name))
+    return (capability, exactness, chrome, role_rank, len(name))
 
 
-def resolve_target(sandbox: Sandbox, target: dict[str, Any]) -> GroundedNode:
+def resolve_target(
+    sandbox: Sandbox, target: dict[str, Any], action: str = ""
+) -> GroundedNode:
     """Find the node a step's target refers to on the sandbox's current screen.
 
     Matching is by accessible **name**, with `role` used to rank candidates rather than to
@@ -175,7 +243,7 @@ def resolve_target(sandbox: Sandbox, target: dict[str, Any]) -> GroundedNode:
     if not matches:
         raise NodeNotFoundError(f"No node on screen matches {describe(target)}")
 
-    ranked = sorted(matches, key=lambda m: _rank(m, role, name))
+    ranked = sorted(matches, key=lambda m: _rank(m, role, name, action))
     best = ranked[0]
     best_role = (getattr(best, "role", "") or "").lower()
     if role and best_role != role.lower():
@@ -216,7 +284,7 @@ def visible_candidates(sandbox: Sandbox, limit: int = 40) -> list[dict[str, Any]
 
 
 def wait_for_target(
-    sandbox: Sandbox, target: dict[str, Any], timeout_seconds: float
+    sandbox: Sandbox, target: dict[str, Any], timeout_seconds: float, action: str = ""
 ) -> GroundedNode:
     """Poll until the target appears, or raise once the timeout is spent.
 
@@ -228,7 +296,7 @@ def wait_for_target(
     while True:
         attempts += 1
         try:
-            return resolve_target(sandbox, target)
+            return resolve_target(sandbox, target, action)
         except NodeNotFoundError:
             if time.monotonic() >= deadline:
                 raise NodeNotFoundError(

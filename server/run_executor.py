@@ -185,7 +185,7 @@ def _execute(run_id: str, brief: dict[str, Any], api_key: str, snapshot: str) ->
     broadcaster.publish(run_id, "run", {"status": "running", "finished_at": None})
 
     try:
-        with worker_sandboxes(api_key, snapshot, len(workers)) as slots:
+        with worker_sandboxes(api_key, snapshot, len(workers), run_id=run_id) as slots:
             threads = [
                 threading.Thread(
                     target=_run_one,
