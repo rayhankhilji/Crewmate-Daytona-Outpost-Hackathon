@@ -30,7 +30,7 @@ def build_vision_prompt(
         )
 
     return (
-        "You are Owari's workflow-comprehension engine. Review the recording frames in chronological order "
+        "You are Crewmate's workflow-comprehension engine. Review the recording frames in chronological order "
         "and infer the user's intended reusable workflow, rather than transcribing every interaction. "
         "Return ONLY one JSON object, with no Markdown fence, commentary, or explanation. "
         f"The user named the task: {task_name.strip()!r}.\n\n"
@@ -60,6 +60,13 @@ def build_vision_prompt(
         "- A sentence may build across multiple adjacent frames while it is being typed. Reconstruct the final "
         "stable text from the chronological sequence before the operator submits it; do not invent, rewrite, "
         "or omit words that are visible across those frames.\n"
+        "- observed_rows is optional display data, never workflow instructions. If the Brief declares variables "
+        "and the frames visibly show a list, table, queue, search results, or other set of records the operator "
+        "was working from, read only the values that correspond to those variables and emit observed_rows. Each "
+        "row key must be an exact source_column declared by this Brief's variables, and each value must be a "
+        "string copied verbatim from the screen. Include only rows you actually saw; never infer missing entries, "
+        "invent rows, or pad the list to a round number. Omit observed_rows entirely when there are no variables "
+        "or no clearly observed matching rows. The operator confirms or edits this display data before any run.\n"
         "- Detect conditions. If a step happens only because of something visible on the current screen, give "
         "that step a condition with a plain-English if predicate and else of skip_step or end_workflow. Omit "
         "condition entirely from unconditional steps.\n"

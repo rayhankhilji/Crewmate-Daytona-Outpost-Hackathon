@@ -20,7 +20,7 @@ PADDED_VARIABLE_REFERENCE = re.compile(r"\{\{[^{}]*\s[^{}]*\}\}")
 
 
 class ComprehensionError(RuntimeError):
-    """Raised when Owari cannot return one complete, schema-valid Brief."""
+    """Raised when Crewmate cannot return one complete, schema-valid Brief."""
 
 
 def comprehend_recording(
@@ -204,7 +204,7 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Turn an Owari recording into a Brief."
+        description="Turn a Crewmate recording into a Brief."
     )
     parser.add_argument("video_path", type=Path)
     parser.add_argument("task_name")

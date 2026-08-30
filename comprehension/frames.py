@@ -77,7 +77,7 @@ def sample_frames(
 
 def _create_frame_directory(output_directory: Path | None) -> Path:
     if output_directory is None:
-        return Path(tempfile.mkdtemp(prefix="owari-frames-"))
+        return Path(tempfile.mkdtemp(prefix="crewmate-frames-"))
 
     if output_directory.exists():
         raise FrameSamplingError(

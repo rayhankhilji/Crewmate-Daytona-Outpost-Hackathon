@@ -39,5 +39,5 @@ server.on("error", (error: NodeJS.ErrnoException) => {
 });
 
 server.listen(PORT, "127.0.0.1", () => {
-  console.log(`Owari recording stub listening on http://127.0.0.1:${PORT}`);
+  console.log(`Crewmate recording stub listening on http://127.0.0.1:${PORT}`);
 });

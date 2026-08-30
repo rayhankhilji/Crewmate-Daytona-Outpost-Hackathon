@@ -34,7 +34,7 @@ async function uploadPendingRecording(): Promise<void> {
     throw new Error("There is no saved recording to upload.");
   }
 
-  const upload = await window.owariOverlay.uploadRecording(
+  const upload = await window.crewmateOverlay.uploadRecording(
     pendingRecording.videoPath,
     taskNameInput.value,
     pendingRecording.durationSeconds
@@ -46,7 +46,7 @@ async function uploadPendingRecording(): Promise<void> {
 
 openSettingsButton.addEventListener("click", async () => {
   try {
-    await window.owariOverlay.openScreenRecordingSettings();
+    await window.crewmateOverlay.openScreenRecordingSettings();
   } catch {
     setStatus("System Settings could not be opened. Enable Screen Recording permission manually.", true);
   }

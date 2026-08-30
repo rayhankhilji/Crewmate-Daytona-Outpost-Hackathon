@@ -1,1 +1,1 @@
-"""Turn recorded workflows into validated Owari Briefs."""
+"""Turn recorded workflows into validated Crewmate Briefs."""

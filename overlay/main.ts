@@ -177,11 +177,11 @@ async function uploadRecording(
       body: formData
     });
   } catch {
-    throw new Error("Owari could not reach the local server. Your recording is saved; retry when it is running.");
+    throw new Error("Crewmate could not reach the local server. Your recording is saved; retry when it is running.");
   }
 
   if (!response.ok) {
-    throw new Error("Owari could not upload the recording. Your recording is saved; retry in a moment.");
+    throw new Error("Crewmate could not upload the recording. Your recording is saved; retry in a moment.");
   }
 
   const payload: unknown = await response.json();
@@ -221,7 +221,7 @@ async function createOverlayWindow(): Promise<BrowserWindow> {
     skipTaskbar: true,
     alwaysOnTop: true,
     type: "panel",
-    title: "Owari recorder",
+    title: "Crewmate recorder",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -266,7 +266,7 @@ if (!hasSingleInstanceLock) {
       }
     });
   }).catch((error: unknown) => {
-    console.error("Owari overlay could not start.", error);
+    console.error("Crewmate overlay could not start.", error);
     app.quit();
   });
 

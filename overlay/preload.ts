@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-contextBridge.exposeInMainWorld("owariOverlay", {
+contextBridge.exposeInMainWorld("crewmateOverlay", {
   getPrimaryDisplaySource: (): Promise<string> => ipcRenderer.invoke("capture:primary-display-source"),
   getScreenRecordingPermissionStatus: (): Promise<string> => ipcRenderer.invoke("permission:screen-recording-status"),
   openScreenRecordingSettings: (): Promise<void> => ipcRenderer.invoke("permission:open-screen-recording-settings"),

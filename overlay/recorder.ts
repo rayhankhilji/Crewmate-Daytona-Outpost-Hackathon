@@ -3,7 +3,7 @@ interface SavedRecording {
   videoPath: string;
 }
 
-interface OwariOverlayApi {
+interface CrewmateOverlayApi {
   getPrimaryDisplaySource(): Promise<string>;
   getScreenRecordingPermissionStatus(): Promise<string>;
   openScreenRecordingSettings(): Promise<void>;
@@ -12,7 +12,7 @@ interface OwariOverlayApi {
 }
 
 interface Window {
-  owariOverlay: OwariOverlayApi;
+  crewmateOverlay: CrewmateOverlayApi;
 }
 
 interface DesktopCaptureMandatoryConstraints {
@@ -52,12 +52,12 @@ class ScreenRecorder {
       throw new Error("A recording is already in progress.");
     }
 
-    const permissionStatus = await window.owariOverlay.getScreenRecordingPermissionStatus();
+    const permissionStatus = await window.crewmateOverlay.getScreenRecordingPermissionStatus();
     if (permissionStatus === "denied" || permissionStatus === "restricted") {
       throw new ScreenRecordingPermissionError();
     }
 
-    const sourceId = await window.owariOverlay.getPrimaryDisplaySource();
+    const sourceId = await window.crewmateOverlay.getPrimaryDisplaySource();
     const desktopConstraints: DesktopCaptureConstraints = {
       mandatory: {
         chromeMediaSource: "desktop",
@@ -123,7 +123,7 @@ class ScreenRecorder {
     this.onTimer("00:00");
 
     const webmData = await new Blob(this.chunks, { type: "video/webm" }).arrayBuffer();
-    return window.owariOverlay.saveRecording(webmData, durationSeconds);
+    return window.crewmateOverlay.saveRecording(webmData, durationSeconds);
   }
 
   private startTimer(): void {
