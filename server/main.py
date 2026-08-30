@@ -65,4 +65,7 @@ async def health() -> dict[str, object]:
         "daytona": daytona_ok,
         "snapshot": config.snapshot_name,
         "vision_model": config.vision_model,
+        # The dashboard caps its row selection to this, so a launch cannot be built that
+        # the server would only reject with a 409.
+        "max_parallel_workers": config.max_parallel_workers,
     }
