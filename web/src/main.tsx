@@ -12,7 +12,7 @@ import { App } from './App'
 
 const container = document.getElementById('root')
 if (container === null) {
-  throw new Error('Owari: #root is missing from index.html; the app cannot mount.')
+  throw new Error('Crewmate: #root is missing from index.html; the app cannot mount.')
 }
 
 createRoot(container).render(

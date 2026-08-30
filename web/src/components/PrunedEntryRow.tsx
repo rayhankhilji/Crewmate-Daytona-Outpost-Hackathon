@@ -2,9 +2,9 @@ import { formatOffset } from '../lib/format'
 import type { PrunedSegment } from '../types'
 
 /**
- * A segment Owari decided not to keep, shown permanently.
+ * A segment Crewmate decided not to keep, shown permanently.
  *
- * It arrives with the same entrance as a step and then stays. Owari discarding
+ * It arrives with the same entrance as a step and then stays. Crewmate discarding
  * a dead end is evidence that it understood the intent rather than recording
  * keystrokes, so the reason has to remain readable — a card that erased itself
  * would take the evidence with it.

@@ -1,5 +1,5 @@
 /*
- * Owari design tokens — the Owari brand system (cream / graphite, Satoshi).
+ * Crewmate design tokens — the Crewmate brand system (cream / graphite, Satoshi).
  *
  * This is the ONLY file in web/ permitted to contain a literal colour value.
  * Everywhere else, reference a token: via Tailwind's theme (bg-surface,

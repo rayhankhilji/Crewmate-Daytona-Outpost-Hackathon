@@ -20,7 +20,7 @@ export function BriefEditor({ briefId }: { briefId: string | null }) {
   if (briefId === null) {
     return (
       <EmptyState
-        message="A Brief is what Owari understood from a recording. Open one to change its steps, targets and variables before launching."
+        message="A Brief is what Crewmate understood from a recording. Open one to change its steps, targets and variables before launching."
         action={{ label: 'Go to recordings', href: hrefFor({ view: 'recordings' }) }}
       />
     )
@@ -202,7 +202,7 @@ function BriefForm({ record }: { record: BriefRecord }) {
       <div className="mb-6 overflow-hidden rounded-md border border-border bg-surface shadow-card">
         {draft.variables.length === 0 ? (
           <p className="px-4 py-3 text-sm text-text-muted">
-            Owari found no input data in this recording — every worker will run identical steps.
+            Crewmate found no input data in this recording — every worker will run identical steps.
           </p>
         ) : (
           draft.variables.map((variable, index) => (
@@ -260,7 +260,7 @@ function BriefForm({ record }: { record: BriefRecord }) {
       <div className="overflow-hidden rounded-md border border-border bg-surface shadow-card">
         {draft.pruned.length === 0 ? (
           <p className="px-4 py-3 text-sm text-text-muted">
-            Owari found no dead ends in this recording.
+            Crewmate found no dead ends in this recording.
           </p>
         ) : (
           draft.pruned.map((segment) => (

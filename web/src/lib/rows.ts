@@ -68,17 +68,34 @@ export function parseRows(text: string, brief: Brief): RowsResult {
   return { ok: true, columns, rows }
 }
 
-/** A header row plus the values observed in the recording, ready to edit. */
-export function exampleRows(brief: Brief, count: number): string {
+/**
+ * Seeds the paste box from the Brief itself.
+ *
+ * Prefers `observed_rows` — values Crewmate actually read off the screen during
+ * the recording — and falls back to the single example each variable carries.
+ * It never invents a worker count: MAX_PARALLEL_WORKERS lives on the server
+ * and /health does not report it, so any number here would be a guess.
+ */
+export function seedRows(brief: Brief): string {
   const columns = brief.variables.map((variable) => variable.source_column)
   if (columns.length === 0) {
     return ''
   }
   const header = columns.join('\t')
-  const body = Array.from({ length: count }, (_, index) =>
-    brief.variables
-      .map((variable) => (index === 0 ? variable.example : `${variable.example} ${index + 1}`))
-      .join('\t'),
-  )
+
+  const observed = brief.observed_rows ?? []
+  const body =
+    observed.length > 0
+      ? observed.map((row) => columns.map((column) => row[column] ?? '').join('\t'))
+      : [brief.variables.map((variable) => variable.example).join('\t')]
+
   return [header, ...body].join('\n')
+}
+
+/** How many rows `seedRows` would produce, for labelling the control. */
+export function seedRowCount(brief: Brief): number {
+  if (brief.variables.length === 0) {
+    return 0
+  }
+  return Math.max(brief.observed_rows?.length ?? 0, 1)
 }

@@ -15,7 +15,7 @@ export function messageFor(cause: unknown): string {
   if (cause instanceof Error && cause.message !== '') {
     return cause.message
   }
-  return 'Something failed that Owari could not describe. Try again.'
+  return 'Something failed that Crewmate could not describe. Try again.'
 }
 
 export interface AsyncResult<T> {

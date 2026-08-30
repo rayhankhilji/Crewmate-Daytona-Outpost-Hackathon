@@ -68,7 +68,7 @@ function DegradedBar({ health }: { health: Health }) {
         role="status"
         className="shrink-0 border-b border-danger bg-danger-tint px-6 py-2 text-sm text-danger"
       >
-        Cannot reach the Owari server on 127.0.0.1:8000. Start it and this bar will clear on its
+        Cannot reach the Crewmate server on 127.0.0.1:8000. Start it and this bar will clear on its
         own.
       </p>
     )
@@ -92,7 +92,7 @@ export function AppShell({ route, briefId, runId, bleed, health, children }: App
     <div className="flex h-screen overflow-hidden bg-bg">
       <aside className="flex w-rail shrink-0 flex-col border-r border-border bg-surface">
         <div className="flex flex-col gap-1 px-4 py-6">
-          <span className="text-base font-semibold tracking-tight text-text">Owari</span>
+          <span className="text-base font-semibold tracking-tight text-text">Crewmate</span>
           <span className="font-mono text-xs text-text-faint">watch once, run everywhere</span>
         </div>
 
@@ -107,7 +107,7 @@ export function AppShell({ route, briefId, runId, bleed, health, children }: App
                 className={
                   active
                     ? 'flex h-control items-center gap-3 rounded-sm bg-surface-sunken px-3 text-sm font-medium text-text'
-                    : 'flex h-control items-center gap-3 rounded-sm px-3 text-sm font-normal text-text-muted transition-colors duration-fast ease-owari hover:bg-surface-raised hover:text-text'
+                    : 'flex h-control items-center gap-3 rounded-sm px-3 text-sm font-normal text-text-muted transition-colors duration-fast ease-crewmate hover:bg-surface-raised hover:text-text'
                 }
               >
                 <span className="font-mono text-xs text-text-faint">{item.index}</span>

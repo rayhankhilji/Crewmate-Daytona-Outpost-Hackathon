@@ -383,7 +383,7 @@ function SpeedrunStage({ record }: { record: BriefRecord }) {
                     className={
                       option === speed
                         ? 'rounded-sm bg-surface-raised px-2 py-1 font-mono text-xs text-text'
-                        : 'rounded-sm px-2 py-1 font-mono text-xs text-text-muted transition-colors duration-fast ease-owari hover:text-text'
+                        : 'rounded-sm px-2 py-1 font-mono text-xs text-text-muted transition-colors duration-fast ease-crewmate hover:text-text'
                     }
                   >
                     {option}×
@@ -399,7 +399,7 @@ function SpeedrunStage({ record }: { record: BriefRecord }) {
           className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-surface shadow-card"
         >
           <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-            <h2 className="text-base font-semibold text-text">What Owari understood</h2>
+            <h2 className="text-base font-semibold text-text">What Crewmate understood</h2>
             <span className="font-mono text-xs tabular-nums text-text-muted">
               {stepsRevealed}/{brief.steps.length} steps
             </span>
@@ -408,7 +408,7 @@ function SpeedrunStage({ record }: { record: BriefRecord }) {
           <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
             {revealed === 0 ? (
               <p className="px-4 py-6 text-sm text-text-muted">
-                Nothing yet. Press play — each step Owari understood is added here as the replay
+                Nothing yet. Press play — each step Crewmate understood is added here as the replay
                 reaches it, alongside the dead ends it chose to discard.
               </p>
             ) : (

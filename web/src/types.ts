@@ -65,6 +65,13 @@ export interface Brief {
   variables: BriefVariable[]
   steps: BriefStep[]
   pruned: PrunedSegment[]
+  /**
+   * Candidate input rows read off the screen during the recording. Optional
+   * and additive — absent on older Briefs and deliberately not in the
+   * contract's `required` list. Display only: the operator confirms or edits
+   * them before anything runs. Keys are the Brief's `source_column` values.
+   */
+  observed_rows?: InputRow[]
 }
 
 /** Confidence at or above this renders no marker. See DESIGN.md. */
@@ -185,6 +192,12 @@ export interface HealthResponse {
   daytona: boolean
   snapshot: string
   vision_model: string
+  /**
+   * PROPOSED: the server's MAX_PARALLEL_WORKERS. Absent today, so the launch
+   * panel cannot cap a selection and relies on the server's 409. The moment
+   * the server reports it, the panel trims the selection instead.
+   */
+  max_parallel_workers?: number
 }
 
 /* -- Server-sent events ------------------------------------------------- */

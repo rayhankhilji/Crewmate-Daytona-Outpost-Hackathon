@@ -1,3 +1,4 @@
+import { Button } from './Button'
 import { LiveBadge, LiveScreen } from './LiveScreen'
 import { StatusChip, type StatusTone } from './StatusChip'
 import type { WorkerStatus } from '../types'
@@ -61,6 +62,10 @@ export interface WorkerTileProps {
   previewUrl: string | null
   /** Opens this worker's screen full size. */
   onFocus: () => void
+  /** Frames captured from the run stream, available to save once finished. */
+  frameCount: number
+  onSaveVideo: () => void
+  savingVideo: boolean
 }
 
 export function WorkerTile({
@@ -72,14 +77,18 @@ export function WorkerTile({
   error,
   previewUrl,
   onFocus,
+  frameCount,
+  onSaveVideo,
+  savingVideo,
 }: WorkerTileProps) {
   const active = status === 'running'
+  const finished = status === 'complete' || status === 'failed' || status === 'skipped'
   // A live screen beats a three-second-old screenshot whenever one exists.
   const live = previewUrl !== null && status !== 'pending'
 
   return (
     <article
-      className={`overflow-hidden rounded-md border border-t-2 bg-surface shadow-card transition-colors duration-fast ease-owari ${
+      className={`overflow-hidden rounded-md border border-t-2 bg-surface shadow-card transition-colors duration-fast ease-crewmate ${
         TOP_BORDER[status]
       } ${active ? 'border-border-strong' : 'border-border'}`}
     >
@@ -129,8 +138,15 @@ export function WorkerTile({
         </p>
       </button>
 
-      <div className="flex flex-col gap-1 border-t border-border px-3 py-2">
-        <StatusChip tone={TONE[status]} label={LABEL[status]} />
+      <div className="flex flex-col gap-2 border-t border-border px-3 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <StatusChip tone={TONE[status]} label={LABEL[status]} />
+          {finished && frameCount > 0 ? (
+            <Button onClick={onSaveVideo} disabled={savingVideo}>
+              {savingVideo ? 'Saving…' : `Save video · ${frameCount} frames`}
+            </Button>
+          ) : null}
+        </div>
         {error !== null ? <p className="text-xs text-danger">{error}</p> : null}
       </div>
     </article>

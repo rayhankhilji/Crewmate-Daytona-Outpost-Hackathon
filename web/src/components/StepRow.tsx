@@ -30,7 +30,7 @@ function ConfidenceMarker({ confidence }: { confidence: number }) {
   return (
     <span
       className="inline-flex shrink-0 items-center gap-2"
-      title="Owari is unsure about this step. Check it before launching."
+      title="Crewmate is unsure about this step. Check it before launching."
     >
       <span className="h-2 w-2 rounded-full bg-warning" />
       <span className="font-mono text-xs text-warning">{confidence.toFixed(2)}</span>
@@ -92,7 +92,7 @@ export function StepRow({
   return (
     <div
       className={[
-        'flex gap-4 bg-surface px-4 py-3 transition-colors duration-fast ease-owari hover:bg-surface-raised',
+        'flex gap-4 bg-surface px-4 py-3 transition-colors duration-fast ease-crewmate hover:bg-surface-raised',
         card
           ? 'rounded-md border border-border shadow-card'
           : 'border-b border-border last:border-b-0',

@@ -17,7 +17,7 @@ export function Input({ label, error, mono = false, className, id, ...rest }: In
         id={id}
         aria-invalid={invalid}
         className={[
-          'h-control w-full rounded-sm border bg-surface px-3 text-sm text-text transition-colors duration-fast ease-owari placeholder:text-text-faint focus:border-border-strong',
+          'h-control w-full rounded-sm border bg-surface px-3 text-sm text-text transition-colors duration-fast ease-crewmate placeholder:text-text-faint focus:border-border-strong',
           invalid ? 'border-danger' : 'border-border',
           mono ? 'font-mono text-xs' : '',
           className ?? '',

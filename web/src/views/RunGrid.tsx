@@ -7,13 +7,15 @@ import { EmptyState, ErrorState, SkeletonRows } from '../components/states'
 import { ViewHeader } from '../components/ViewHeader'
 import { WorkerTile } from '../components/WorkerTile'
 import { ApiError } from '../api'
-import { createRun, getBrief, getRun, getRunResults, subscribeToRun } from '../data'
-import { exampleRows, parseRows } from '../lib/rows'
+import { createRun, getBrief, getHealth, getRun, getRunResults, subscribeToRun } from '../data'
+import { parseRows, seedRowCount, seedRows } from '../lib/rows'
+import { downloadBlob, renderSessionVideo, type SessionFrame } from '../lib/sessionVideo'
 import { hrefFor, useNavigate } from '../lib/router'
 import { messageFor, useAsync } from '../lib/useAsync'
 import { SANDBOX_HEIGHT, SANDBOX_WIDTH } from '../types'
 import type {
   BriefRecord,
+  HealthResponse,
   InputRow,
   RunDetail,
   RunResultRow,
@@ -66,25 +68,49 @@ function monitorFailure(cause: unknown, fallback: string): string {
 function LaunchPanel({ briefId }: { briefId: string }) {
   const navigate = useNavigate()
   const { state, reload } = useAsync<BriefRecord>((signal) => getBrief(briefId, signal), [briefId])
+  const health = useAsync<HealthResponse>((signal) => getHealth(signal), [])
+
   const [text, setText] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [launching, setLaunching] = useState(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
+  const [chosen, setChosen] = useState<Set<number> | null>(null)
+  const [editing, setEditing] = useState(false)
 
   const brief = state.status === 'ready' ? state.data.content : null
-  // A workflow with no variables takes no input data — answering a mailbox,
-  // clearing a queue. It runs once, against a single empty row.
+  const observed = brief?.observed_rows ?? []
+  // Present and non-empty is the one-click path; absent and empty are the same.
+  const oneClick = observed.length > 0
   const takesInput = brief !== null && brief.variables.length > 0
+
+  const limit =
+    health.state.status === 'ready' ? (health.state.data.max_parallel_workers ?? null) : null
+
+  // Everything is selected by default, trimmed to the server's limit when it
+  // reports one, so Launch is live the moment the panel opens.
+  const selected = useMemo<Set<number>>(() => {
+    if (chosen !== null) {
+      return chosen
+    }
+    const cap = limit ?? observed.length
+    return new Set(observed.map((_, index) => index).filter((index) => index < cap))
+  }, [chosen, limit, observed])
+
   const parsed = useMemo(
-    () => (brief === null || !takesInput ? null : parseRows(text, brief)),
-    [brief, takesInput, text],
+    () => (brief === null || oneClick || !takesInput ? null : parseRows(text, brief)),
+    [brief, oneClick, takesInput, text],
   )
+
   const rows = useMemo<InputRow[] | null>(() => {
+    if (oneClick) {
+      const picked = observed.filter((_, index) => selected.has(index))
+      return picked.length > 0 ? picked : null
+    }
     if (!takesInput) {
       return [{}]
     }
     return parsed !== null && parsed.ok ? parsed.rows : null
-  }, [parsed, takesInput])
+  }, [oneClick, observed, parsed, selected, takesInput])
 
   const launch = useCallback(() => {
     setSubmitted(true)
@@ -119,6 +145,7 @@ function LaunchPanel({ briefId }: { briefId: string }) {
 
   const content = state.data.content
   const columns = content.variables.map((variable) => variable.source_column)
+  const count = rows?.length ?? 0
 
   return (
     <>
@@ -130,15 +157,15 @@ function LaunchPanel({ briefId }: { briefId: string }) {
             variant="primary"
             size="launch"
             onClick={launch}
-            disabled={launching || (takesInput && text.trim() === '')}
+            disabled={launching || rows === null}
           >
             {launching
               ? 'Launching…'
               : !takesInput
                 ? 'Run once'
-                : rows !== null
-                  ? `Launch ${rows.length} ${rows.length === 1 ? 'worker' : 'workers'}`
-                  : 'Launch'}
+                : count > 0
+                  ? `Run ${count} ${count === 1 ? 'worker' : 'workers'}`
+                  : 'Run'}
           </Button>
         }
       />
@@ -161,20 +188,53 @@ function LaunchPanel({ briefId }: { briefId: string }) {
         ))}
       </section>
 
-      {takesInput ? (
+      {oneClick ? (
+        <ObservedRows
+          rows={observed}
+          columns={columns}
+          selected={selected}
+          limit={limit}
+          editing={editing}
+          text={text}
+          onToggleEditing={() => {
+            if (!editing) {
+              setText(JSON.stringify(observed, null, 2))
+            }
+            setEditing(!editing)
+          }}
+          onText={(value) => {
+            setText(value)
+            try {
+              const next = JSON.parse(value) as InputRow[]
+              if (Array.isArray(next)) {
+                setChosen(new Set(next.map((_, index) => index)))
+              }
+            } catch {
+              // Left as typed; the selection stays on the last valid parse.
+            }
+          }}
+          onToggle={(index) =>
+            setChosen(() => {
+              const next = new Set(selected)
+              if (next.has(index)) {
+                next.delete(index)
+              } else {
+                next.add(index)
+              }
+              return next
+            })
+          }
+        />
+      ) : takesInput ? (
         <div className="flex flex-col gap-2 rounded-md border border-border bg-surface p-4 shadow-card">
           <div className="flex items-baseline justify-between gap-4">
             <label htmlFor="rows" className="font-mono text-xs text-text-faint">
               input rows — one worker per row, tab or comma separated
             </label>
-            {/*
-              Seeds the header and one observed row. It deliberately does not
-              choose a worker count: MAX_PARALLEL_WORKERS lives on the server
-              and /health does not report it, so any number here would be a
-              guess that a 409 would correct.
-            */}
-            <Button onClick={() => setText(exampleRows(content, 1))}>
-              Fill a row from the recording
+            <Button onClick={() => setText(seedRows(content))}>
+              {seedRowCount(content) === 1
+                ? 'Fill a row from the recording'
+                : `Fill ${seedRowCount(content)} rows from the recording`}
             </Button>
           </div>
 
@@ -184,7 +244,7 @@ function LaunchPanel({ briefId }: { briefId: string }) {
             spellCheck={false}
             onChange={(event) => setText(event.target.value)}
             placeholder={columns.join('\t')}
-            className={`w-full resize-y rounded-sm border bg-surface-raised p-3 font-mono text-xs text-text transition-colors duration-fast ease-owari placeholder:text-text-faint focus:border-border-strong ${
+            className={`w-full resize-y rounded-sm border bg-surface-raised p-3 font-mono text-xs text-text transition-colors duration-fast ease-crewmate placeholder:text-text-faint focus:border-border-strong ${
               submitted && parsed !== null && !parsed.ok ? 'border-danger' : 'border-border'
             }`}
             rows={10}
@@ -197,23 +257,103 @@ function LaunchPanel({ briefId }: { briefId: string }) {
           {submitted && parsed !== null && !parsed.ok ? (
             <p className="text-xs text-danger">{parsed.message}</p>
           ) : null}
-
-          {parsed !== null && parsed.ok ? (
-            <p className="font-mono text-xs text-accent">
-              {parsed.rows.length} rows · {parsed.columns.join(', ')}
-            </p>
-          ) : null}
         </div>
       ) : (
         <div className="flex flex-col gap-2 rounded-md border border-border bg-surface p-6 shadow-card">
           <p className="max-w-prose text-sm text-text-muted">
-            This workflow takes no input data — Owari found no values in the recording that came
+            This workflow takes no input data — Crewmate found no values in the recording that came
             from a spreadsheet. It runs once, doing the same thing it watched you do.
           </p>
           <p className="font-mono text-xs text-text-faint">1 worker · no input columns</p>
         </div>
       )}
     </>
+  )
+}
+
+interface ObservedRowsProps {
+  rows: readonly InputRow[]
+  columns: readonly string[]
+  selected: ReadonlySet<number>
+  limit: number | null
+  editing: boolean
+  text: string
+  onToggleEditing: () => void
+  onText: (value: string) => void
+  onToggle: (index: number) => void
+}
+
+/**
+ * The one-click path. Rows Crewmate read off the screen during the recording,
+ * already chosen, so Launch is live the moment the panel opens — nothing
+ * stands between the operator and starting the run.
+ */
+function ObservedRows({
+  rows,
+  columns,
+  selected,
+  limit,
+  editing,
+  text,
+  onToggleEditing,
+  onText,
+  onToggle,
+}: ObservedRowsProps) {
+  const overLimit = limit !== null && rows.length > limit
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4 shadow-card">
+      <div className="flex items-baseline justify-between gap-4">
+        <p className="text-sm text-text">
+          {selected.size} of {rows.length} {rows.length === 1 ? 'row' : 'rows'} read from the
+          recording will run.
+        </p>
+        <Button onClick={onToggleEditing}>{editing ? 'Done editing' : 'Edit rows'}</Button>
+      </div>
+
+      {overLimit ? (
+        <p className="text-xs text-warning">
+          This account runs {limit} at a time, so the first {limit} are selected. The rest stay
+          listed — deselect and reselect to choose different ones.
+        </p>
+      ) : null}
+
+      {editing ? (
+        <textarea
+          value={text}
+          spellCheck={false}
+          onChange={(event) => onText(event.target.value)}
+          className="w-full resize-y rounded-sm border border-border bg-surface-raised p-3 font-mono text-xs text-text"
+          rows={10}
+        />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {rows.map((row, index) => (
+            <li key={index}>
+              <label className="flex cursor-pointer items-center gap-3 rounded-sm border border-border bg-surface-raised px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={selected.has(index)}
+                  onChange={() => onToggle(index)}
+                  className="h-4 w-4 accent-accent"
+                />
+                <span className="font-mono text-xs tabular-nums text-text-faint">
+                  {String(index).padStart(2, '0')}
+                </span>
+                <span className="flex flex-wrap items-center gap-4">
+                  {columns.map((column) => (
+                    <span key={column} className="text-sm text-text">
+                      <span className="font-mono text-xs text-text-faint">{column}=</span>
+                      {row[column] ?? ''}
+                    </span>
+                  ))}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -276,6 +416,12 @@ function RunMonitor({ runId }: { runId: string }) {
   const [resultsError, setResultsError] = useState<string | null>(null)
   const [stepTotal, setStepTotal] = useState(0)
   const [focused, setFocused] = useState<string | null>(null)
+  // Every frame that arrives is kept so the session can be saved afterwards.
+  const [frames, setFrames] = useState<Map<string, SessionFrame[]>>(new Map())
+  const [layout, setLayout] = useState<'grid' | 'studio'>('studio')
+  const [savingVideo, setSavingVideo] = useState<string | null>(null)
+  const [videoError, setVideoError] = useState<string | null>(null)
+  const runStartedAt = useRef<number>(Date.now())
   const seeded = useRef<string | null>(null)
 
   // Seed from GET /runs/{id} so a reload or a reconnection starts from truth.
@@ -304,6 +450,20 @@ function RunMonitor({ runId }: { runId: string }) {
       .catch(() => setStepTotal(0))
   }, [state])
 
+  const saveVideo = useCallback(
+    (workerId: string, rowIndex: number) => {
+      setVideoError(null)
+      setSavingVideo(workerId)
+      renderSessionVideo(frames.get(workerId) ?? [])
+        .then((blob) =>
+          downloadBlob(blob, `crewmate-run-worker-${String(rowIndex).padStart(2, '0')}.webm`),
+        )
+        .catch((cause: unknown) => setVideoError(messageFor(cause)))
+        .finally(() => setSavingVideo(null))
+    },
+    [frames],
+  )
+
   const terminal = runStatus === 'complete' || runStatus === 'failed'
   const elapsed = useElapsed(runStatus !== null && !terminal)
 
@@ -312,7 +472,18 @@ function RunMonitor({ runId }: { runId: string }) {
       return
     }
     const subscription = subscribeToRun(runId, {
-      onWorker: (event) =>
+      onWorker: (event) => {
+        if (event.screenshot !== null) {
+          const frame: SessionFrame = {
+            at: Date.now() - runStartedAt.current,
+            jpeg: event.screenshot,
+          }
+          setFrames((current) => {
+            const next = new Map(current)
+            next.set(event.worker_id, [...(next.get(event.worker_id) ?? []), frame])
+            return next
+          })
+        }
         setWorkers((current) => {
           const next = new Map(current)
           const existing = next.get(event.worker_id)
@@ -329,7 +500,8 @@ function RunMonitor({ runId }: { runId: string }) {
             preview_url: event.preview_url ?? existing?.preview_url ?? null,
           })
           return next
-        }),
+        })
+      },
       onStep: () => undefined,
       onRun: (event) => setRunStatus(event.status),
       onDisconnect: () => setDisconnected(true),
@@ -381,7 +553,30 @@ function RunMonitor({ runId }: { runId: string }) {
           terminal ? '' : ` · ${elapsed}s elapsed`
         }`}
         action={
-          runStatus !== null ? <StatusChip tone={STATUS_TONE[runStatus]} label={runStatus} /> : null
+          <div className="flex items-center gap-3">
+            {/* Studio gives every worker as much screen as it can; the grid is
+                for scanning many at once. */}
+            <div className="flex items-center gap-1 rounded-sm border border-border bg-surface p-1">
+              {(['studio', 'grid'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={layout === option}
+                  onClick={() => setLayout(option)}
+                  className={
+                    layout === option
+                      ? 'rounded-sm bg-surface-sunken px-3 py-1 font-mono text-xs text-text'
+                      : 'rounded-sm px-3 py-1 font-mono text-xs text-text-muted transition-colors duration-fast ease-crewmate hover:text-text'
+                  }
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+            {runStatus !== null ? (
+              <StatusChip tone={STATUS_TONE[runStatus]} label={runStatus} />
+            ) : null}
+          </div>
         }
       />
 
@@ -414,12 +609,18 @@ function RunMonitor({ runId }: { runId: string }) {
       <div
         className="mb-6 grid gap-4"
         style={{
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gridTemplateColumns:
+            layout === 'studio'
+              ? `repeat(${Math.min(Math.max(ordered.length, 1), 2)}, minmax(0, 1fr))`
+              : 'repeat(auto-fill, minmax(280px, 1fr))',
           // DESIGN.md fixes the track sizing. Capping the container to the
           // natural width of this many tiles stops a small run — the tier
           // limit here is 2 — from stranding two tiles in a wide empty row,
           // while a full run still fills the content width.
-          maxWidth: `min(100%, ${ordered.length * TILE_WIDTH + (ordered.length - 1) * TILE_GAP}px)`,
+          maxWidth:
+            layout === 'studio'
+              ? '100%'
+              : `min(100%, ${ordered.length * TILE_WIDTH + (ordered.length - 1) * TILE_GAP}px)`,
         }}
       >
         {ordered.map((worker) => (
@@ -433,6 +634,9 @@ function RunMonitor({ runId }: { runId: string }) {
             error={worker.error}
             previewUrl={worker.preview_url}
             onFocus={() => setFocused(worker.id)}
+            frameCount={(frames.get(worker.id) ?? []).length}
+            onSaveVideo={() => saveVideo(worker.id, worker.row_index)}
+            savingVideo={savingVideo === worker.id}
           />
         ))}
       </div>
@@ -443,6 +647,12 @@ function RunMonitor({ runId }: { runId: string }) {
           stepTotal={stepTotal}
           onClose={() => setFocused(null)}
         />
+      ) : null}
+
+      {videoError !== null ? (
+        <div className="mb-4">
+          <ErrorState message={videoError} />
+        </div>
       ) : null}
 
       {resultsError !== null ? <ErrorState message={resultsError} /> : null}

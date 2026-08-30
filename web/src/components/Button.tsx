@@ -4,7 +4,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'danger'
 export type ButtonSize = 'default' | 'launch'
 
 const BASE =
-  'inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-sm border font-medium transition-colors duration-fast ease-owari disabled:cursor-not-allowed disabled:opacity-40'
+  'inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-sm border font-medium transition-colors duration-fast ease-crewmate disabled:cursor-not-allowed disabled:opacity-40'
 
 const VARIANT: Record<ButtonVariant, string> = {
   // Exactly one primary button is visible per view: graphite on cream.

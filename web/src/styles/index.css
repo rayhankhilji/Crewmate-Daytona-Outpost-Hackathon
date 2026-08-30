@@ -52,17 +52,17 @@
 @layer components {
   /* Motion 1 — a step materialising in the speedrun list. */
   .motion-materialise {
-    animation: owari-materialise var(--duration-base) var(--ease) both;
+    animation: crewmate-materialise var(--duration-base) var(--ease) both;
   }
 
   /* A variable chip the moment the replay detects it. */
   .motion-detect {
-    animation: owari-detect var(--duration-slow) var(--ease) both;
+    animation: crewmate-detect var(--duration-slow) var(--ease) both;
   }
 
   /* Determinate progress only — the one animation allowed to repeat. */
   .motion-skeleton {
-    animation: owari-skeleton 1.2s var(--ease) infinite;
+    animation: crewmate-skeleton 1.2s var(--ease) infinite;
   }
 
   /* A card on the cream ground: hairline plus a diffuse shadow, per brand. */
@@ -74,7 +74,7 @@
   }
 }
 
-@keyframes owari-materialise {
+@keyframes crewmate-materialise {
   from {
     opacity: 0;
     transform: translateY(6px);
@@ -85,7 +85,7 @@
   }
 }
 
-@keyframes owari-detect {
+@keyframes crewmate-detect {
   from {
     outline: 1px solid var(--info);
     outline-offset: 2px;
@@ -96,7 +96,7 @@
   }
 }
 
-@keyframes owari-skeleton {
+@keyframes crewmate-skeleton {
   0%,
   100% {
     opacity: 1;
@@ -108,7 +108,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   /* Keep the opacity changes and the timings; drop the transforms. */
-  @keyframes owari-materialise {
+  @keyframes crewmate-materialise {
     from {
       opacity: 0;
     }

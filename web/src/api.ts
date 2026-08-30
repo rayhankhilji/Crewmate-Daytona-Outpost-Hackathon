@@ -45,7 +45,7 @@ export class ApiError extends Error {
 }
 
 const UNREACHABLE_MESSAGE =
-  'Cannot reach the Owari server on 127.0.0.1:8000. Start it and try again.'
+  'Cannot reach the Crewmate server on 127.0.0.1:8000. Start it and try again.'
 
 interface ErrorBody {
   error: { code: string; message: string }

@@ -93,7 +93,7 @@ const config: Config = {
     },
     transitionTimingFunction: {
       DEFAULT: 'var(--ease)',
-      owari: 'var(--ease)',
+      crewmate: 'var(--ease)',
     },
     transitionDuration: {
       DEFAULT: 'var(--duration-base)',
