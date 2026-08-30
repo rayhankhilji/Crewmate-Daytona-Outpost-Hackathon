@@ -18,7 +18,13 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
-from daytona import CreateSandboxFromSnapshotParams, Daytona, DaytonaError, Sandbox
+from daytona import (
+    CreateSandboxFromSnapshotParams,
+    Daytona,
+    DaytonaError,
+    ListSandboxesQuery,
+    Sandbox,
+)
 
 from executor.daytona_client import DaytonaUnavailableError, get_client
 
@@ -30,6 +36,9 @@ logger = logging.getLogger("crewmate.executor.fork")
 VNC_RESOLUTION = "1280x800"
 
 CREATE_TIMEOUT_SECONDS = 180.0
+# Marks every sandbox this module creates, so orphans can be told apart from anything else
+# in the organisation and reaped without touching a stranger's machine.
+OWNER_LABEL = "crewmate_worker"
 DELETE_TIMEOUT_SECONDS = 60.0
 
 
@@ -54,7 +63,7 @@ def _create_one(client: Daytona, snapshot_name: str, row_index: int) -> Sandbox:
     params = CreateSandboxFromSnapshotParams(
         snapshot=snapshot_name,
         env_vars={"VNC_RESOLUTION": VNC_RESOLUTION},
-        labels={"crewmate_row_index": str(row_index)},
+        labels={OWNER_LABEL: "true", "crewmate_row_index": str(row_index)},
         ephemeral=True,
         auto_delete_interval=0,
     )
@@ -88,6 +97,32 @@ def destroy_all(workers: list[WorkerSandbox]) -> None:
         destroy(worker.sandbox)
 
 
+def reap_orphans(api_key: str) -> int:
+    """Delete sandboxes left behind by a previous run, and report how many.
+
+    Teardown is guaranteed on every normal path, but a hard kill of the server process
+    leaves machines running. On a small tier those orphans consume the whole memory quota,
+    and the next launch fails with a message about limits that says nothing about the real
+    cause. Reaping before provisioning turns that into a self-correcting condition.
+
+    Only sandboxes this module created are touched — they carry OWNER_LABEL — so nothing
+    else in the organisation is at risk.
+    """
+    try:
+        client = get_client(api_key)
+        orphans = list(client.list(ListSandboxesQuery(labels={OWNER_LABEL: "true"})))
+    except (DaytonaError, DaytonaUnavailableError) as exc:
+        logger.warning("Could not check for orphaned sandboxes: %s", exc)
+        return 0
+
+    reaped = 0
+    for sandbox in orphans:
+        logger.warning("Reaping orphaned sandbox %s from a previous run", sandbox.id)
+        destroy(sandbox)
+        reaped += 1
+    return reaped
+
+
 @contextmanager
 def worker_sandboxes(
     api_key: str, snapshot_name: str, count: int
@@ -101,6 +136,10 @@ def worker_sandboxes(
         raise ForkError(f"A run needs at least one worker, got {count}")
     if not snapshot_name:
         raise ForkError("CREWMATE_SNAPSHOT_NAME is not set in .env")
+
+    reaped = reap_orphans(api_key)
+    if reaped:
+        logger.info("Reclaimed %d orphaned sandbox(es) before provisioning", reaped)
 
     client = get_client(api_key)
     workers: list[WorkerSandbox] = []

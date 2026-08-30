@@ -10,10 +10,11 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from executor.daytona_client import check_reachable
+from executor.fork import reap_orphans
 from server import db
 from server.config import config
 from server.errors import ApiError
-from server.events import SSE_HEADERS, Event, channel_stream
+from server.events import SSE_HEADERS, Event, broadcaster, channel_stream
 from server.run_executor import start_run
 
 router = APIRouter()
@@ -166,6 +167,29 @@ async def run_events(run_id: str) -> StreamingResponse:
     return StreamingResponse(
         channel_stream(run_id), media_type="text/event-stream", headers=SSE_HEADERS
     )
+
+
+@router.post("/runs/{run_id}/stop", status_code=202)
+async def stop_run(run_id: str) -> dict[str, Any]:
+    """Abandon a run and destroy its machines.
+
+    Workers are not interrupted mid-step — the Daytona SDK is synchronous and there is no
+    safe way to cancel a call in flight — but every sandbox is destroyed, which ends the
+    steps in progress and frees the quota immediately. The run is closed as failed so the
+    dashboard stops waiting on it.
+    """
+    run = _require_run(run_id)
+    if run.status in TERMINAL_RUN_STATUSES:
+        raise ApiError(409, "run_finished", f"This run already {run.status}.")
+
+    reaped = await run_in_threadpool(reap_orphans, config.daytona_api_key)
+    for worker in db.list_workers(run_id):
+        if worker.status in ("pending", "running"):
+            db.set_worker_failed(worker.id, "Stopped by the operator.")
+    finished_at = db.mark_run_finished(run_id, "failed")
+    broadcaster.publish(run_id, "run", {"status": "failed", "finished_at": finished_at})
+    broadcaster.close(run_id)
+    return {"run_id": run_id, "status": "failed", "sandboxes_destroyed": reaped}
 
 
 @router.get("/runs/{run_id}/results")
