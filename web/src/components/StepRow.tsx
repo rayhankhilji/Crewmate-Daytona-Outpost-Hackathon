@@ -75,16 +75,27 @@ export interface StepRowProps {
   detecting?: ReadonlySet<string>
   /** Row-level status marker, used by the run views. */
   trailing?: React.ReactNode
+  /** Standalone card instead of a row in a divided list. */
+  card?: boolean
   className?: string
 }
 
-export function StepRow({ step, detecting = NO_VARIABLES, trailing, className }: StepRowProps) {
+export function StepRow({
+  step,
+  detecting = NO_VARIABLES,
+  trailing,
+  card = false,
+  className,
+}: StepRowProps) {
   const conditional = step.condition !== undefined
 
   return (
     <div
       className={[
-        'flex gap-4 border-b border-border bg-surface px-4 py-3 transition-colors duration-fast ease-owari last:border-b-0 hover:bg-surface-raised',
+        'flex gap-4 bg-surface px-4 py-3 transition-colors duration-fast ease-owari hover:bg-surface-raised',
+        card
+          ? 'rounded-md border border-border shadow-card'
+          : 'border-b border-border last:border-b-0',
         conditional ? 'border-l-2 border-l-info' : '',
         className ?? '',
       ]

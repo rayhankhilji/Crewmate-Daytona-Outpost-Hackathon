@@ -109,8 +109,6 @@
   --duration-fast: 150ms;
   --duration-base: 200ms;
   --duration-slow: 250ms;
-  /* Motion 2 (pruned segment) holds at full opacity before collapsing. */
-  --duration-prune-hold: 400ms;
 
   color-scheme: light;
 }

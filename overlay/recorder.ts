@@ -62,9 +62,9 @@ class ScreenRecorder {
       mandatory: {
         chromeMediaSource: "desktop",
         chromeMediaSourceId: sourceId,
-        maxFrameRate: 30,
-        maxHeight: 2160,
-        maxWidth: 3840
+        maxFrameRate: 15,
+        maxHeight: 800,
+        maxWidth: 1280
       }
     };
 

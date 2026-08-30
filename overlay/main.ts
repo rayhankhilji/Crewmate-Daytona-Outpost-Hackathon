@@ -97,8 +97,11 @@ async function remuxToMp4(webmPath: string, mp4Path: string): Promise<void> {
       webmPath,
       "-c:v",
       "libx264",
-      "-c:a",
-      "aac",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "23",
+      "-an",
       "-movflags",
       "+faststart",
       mp4Path

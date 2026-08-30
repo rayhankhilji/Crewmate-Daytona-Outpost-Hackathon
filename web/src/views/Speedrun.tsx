@@ -405,11 +405,11 @@ function SpeedrunStage({ record }: { record: BriefRecord }) {
             </span>
           </header>
 
-          <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
             {revealed === 0 ? (
               <p className="px-4 py-6 text-sm text-text-muted">
-                Nothing yet. Press play — steps appear here as the replay reaches them, and dead
-                ends grey out as Owari discards them.
+                Nothing yet. Press play — each step Owari understood is added here as the replay
+                reaches it, alongside the dead ends it chose to discard.
               </p>
             ) : (
               visible.map((entry, index) =>
@@ -418,6 +418,7 @@ function SpeedrunStage({ record }: { record: BriefRecord }) {
                     key={`${run}-step-${entry.step.id}`}
                     step={entry.step}
                     detecting={entry.newVariables}
+                    card
                     className="motion-materialise"
                   />
                 ) : (

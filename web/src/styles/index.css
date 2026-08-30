@@ -55,19 +55,6 @@
     animation: owari-materialise var(--duration-base) var(--ease) both;
   }
 
-  /*
-   * Motion 2 — a pruned segment: full opacity, holds, then greys, strikes
-   * through and collapses. The height is measured in React and transitioned
-   * here, so the collapse always lands exactly on zero.
-   */
-  .prune-entry {
-    overflow: hidden;
-    transition:
-      max-height var(--duration-slow) var(--ease),
-      opacity var(--duration-slow) var(--ease),
-      color var(--duration-slow) var(--ease);
-  }
-
   /* A variable chip the moment the replay detects it. */
   .motion-detect {
     animation: owari-detect var(--duration-slow) var(--ease) both;
