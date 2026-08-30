@@ -121,6 +121,14 @@
         }
       }
     },
+    "observed_rows": {
+      "type": "array",
+      "description": "Candidate input rows read off the screen during the recording. OPTIONAL and additive \u2014 omitting it is valid, and it is deliberately absent from `required`. Display only: the operator confirms or edits these before anything runs. Keys are the `source_column` values this Brief declares in `variables`.",
+      "items": {
+        "type": "object",
+        "additionalProperties": { "type": "string" }
+      }
+    },
     "pruned": {
       "type": "array",
       "description": "Dead-ends, backtracks and corrections excluded from steps. Required, may be empty.",

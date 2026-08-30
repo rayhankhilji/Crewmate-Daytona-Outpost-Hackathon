@@ -149,6 +149,11 @@ Single-user local application. No authentication, no row-level security. The ser
       "at_seconds": "number — timestamp in the recording",
       "reason": "string — why this segment was excluded, in plain English"
     }
+  ],
+  "observed_rows": [
+    {
+      "<source_column>": "string — a value read off the screen during the recording"
+    }
   ]
 }
 ```
@@ -160,4 +165,5 @@ Single-user local application. No authentication, no row-level security. The ser
 - `press_key` and `hotkey` carry their key in `value` (e.g. `"enter"`, `"ctrl+s"`) and use an empty `target`.
 - `wait_for` polls for the target to appear and takes no `value`. It exists so the executor can wait on page loads without sleeping blindly.
 - `confidence` below 0.7 renders with a visible uncertainty marker in the dashboard — see DESIGN.md.
+- `observed_rows` is **optional** and additive. It carries candidate input rows the model read off the screen during the recording — the list the operator was working from — so the dashboard can pre-fill the launch control instead of asking a human to paste JSON. Keys are the `source_column` values declared in `variables`; values are strings read verbatim. It is display data that the operator confirms or edits before launch, never something Owari acts on unreviewed. A Brief with no variables omits it. Omitting it is always valid, and it is deliberately absent from `required`, so every Brief written before it existed still validates.
 - Validation is enforced in exactly one place: `server/brief_schema.py`. Every write path calls it. No module validates a Brief independently.
