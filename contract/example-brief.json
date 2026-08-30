@@ -1,0 +1,109 @@
+{
+  "task_name": "Add qualified lead to CRM",
+  "environment": ["browser", "CRM (logged in)"],
+  "variables": [
+    {
+      "name": "full_name",
+      "source_column": "Name",
+      "example": "Priya Raman"
+    },
+    {
+      "name": "company",
+      "source_column": "Company",
+      "example": "Northwind Logistics"
+    },
+    {
+      "name": "email",
+      "source_column": "Email",
+      "example": "p.raman@northwind.example"
+    }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "intent": "Open the leads section",
+      "action": "invoke_node",
+      "target": { "role": "link", "name": "Leads", "name_match": "exact" },
+      "value": null,
+      "confidence": 0.96
+    },
+    {
+      "id": 2,
+      "intent": "Wait for the leads table to load",
+      "action": "wait_for",
+      "target": { "role": "table", "name": "Leads", "name_match": "substring" },
+      "value": null,
+      "confidence": 0.91
+    },
+    {
+      "id": 3,
+      "intent": "Start a new lead record",
+      "action": "invoke_node",
+      "target": { "role": "button", "name": "New Lead", "name_match": "exact" },
+      "value": null,
+      "confidence": 0.94
+    },
+    {
+      "id": 4,
+      "intent": "Enter the lead's full name",
+      "action": "set_node_value",
+      "target": { "role": "entry", "name": "Full name", "name_match": "exact" },
+      "value": "{{full_name}}",
+      "confidence": 0.93
+    },
+    {
+      "id": 5,
+      "intent": "Enter the company name",
+      "action": "set_node_value",
+      "target": { "role": "entry", "name": "Company", "name_match": "exact" },
+      "value": "{{company}}",
+      "confidence": 0.92
+    },
+    {
+      "id": 6,
+      "intent": "Enter the contact email address",
+      "action": "set_node_value",
+      "target": { "role": "entry", "name": "Email", "name_match": "exact" },
+      "value": "{{email}}",
+      "confidence": 0.89
+    },
+    {
+      "id": 7,
+      "intent": "Mark the lead as qualified, but only if a company was found",
+      "action": "invoke_node",
+      "target": { "role": "check box", "name": "Qualified", "name_match": "exact" },
+      "value": null,
+      "condition": {
+        "if": "the company field resolved to a real organisation rather than being blank",
+        "else": "end_workflow"
+      },
+      "confidence": 0.64
+    },
+    {
+      "id": 8,
+      "intent": "Save the record",
+      "action": "invoke_node",
+      "target": { "role": "button", "name": "Save", "name_match": "exact" },
+      "value": null,
+      "confidence": 0.97
+    },
+    {
+      "id": 9,
+      "intent": "Confirm the save succeeded",
+      "action": "wait_for",
+      "target": { "role": "alert", "name": "saved", "name_match": "substring" },
+      "value": null,
+      "confidence": 0.85
+    }
+  ],
+  "pruned": [
+    {
+      "at_seconds": 8.4,
+      "reason": "Opened the Settings menu and closed it again without changing anything"
+    },
+    {
+      "at_seconds": 21.7,
+      "reason": "Typed the email into the company field, then cleared it and corrected the mistake"
+    }
+  ]
+}

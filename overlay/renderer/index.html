@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Owari recorder</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="overlay" aria-label="Owari screen recorder">
+      <header class="overlay-header">
+        <div class="brand" aria-label="Owari">
+          <span class="brand-mark" aria-hidden="true">O</span>
+          <span class="brand-name">Owari</span>
+        </div>
+        <output id="recording-timer" class="timer" aria-live="polite">00:00</output>
+      </header>
+      <div class="controls">
+        <label class="task-field">
+          <span class="visually-hidden">Task name</span>
+          <input id="task-name" maxlength="200" placeholder="Name this workflow" autocomplete="off" />
+        </label>
+        <button id="record-button" class="record-button" type="button" aria-label="Start recording">
+          <span class="record-indicator" aria-hidden="true"></span>
+          <span id="record-button-label">Record</span>
+        </button>
+      </div>
+      <p id="status-message" class="status-message" aria-live="polite"></p>
+      <button id="open-settings-button" class="settings-button" type="button" hidden>
+        Open Screen Recording Settings
+      </button>
+    </main>
+    <script src="../recorder.js"></script>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

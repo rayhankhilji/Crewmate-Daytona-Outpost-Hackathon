@@ -1,0 +1,24 @@
+# Secrets — never commit
+.env
+.env.local
+
+# Local Python environment
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+
+# Owari runtime state
+server/storage/
+server/owari.db
+server/owari.db-wal
+server/owari.db-shm
+
+# Node
+node_modules/
+dist/
+build/
+out/
+
+# macOS
+.DS_Store

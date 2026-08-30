@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://owari.local/brief.schema.json",
+  "title": "Owari Brief",
+  "description": "FROZEN CONTRACT. Do not edit. Source of truth is docs/DATA_MODEL.md, section 'The Brief contract'. If this file appears wrong, stop and raise it with Rayhan.",
+  "type": "object",
+  "required": ["task_name", "environment", "variables", "steps", "pruned"],
+  "additionalProperties": false,
+  "properties": {
+    "task_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "What the user typed in the overlay before recording."
+    },
+    "environment": {
+      "type": "array",
+      "description": "Human-readable requirements. Display only — Owari does not provision these.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "source_column", "example"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "snake_case identifier, referenced in step values as {{name}}."
+          },
+          "source_column": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Column in the input rows this maps to."
+          },
+          "example": {
+            "type": "string",
+            "description": "The literal value observed in the recording."
+          }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "intent", "action", "target", "value", "confidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "1-based, unique, sequential."
+          },
+          "intent": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Plain English, imperative. Rendered to the user in the speedrun view."
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "invoke_node",
+              "set_node_value",
+              "focus_node",
+              "press_key",
+              "hotkey",
+              "wait_for"
+            ]
+          },
+          "target": {
+            "type": "object",
+            "required": ["role", "name", "name_match"],
+            "additionalProperties": false,
+            "description": "SEMANTIC ONLY. Coordinates are forbidden — additionalProperties false rejects any x or y field.",
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "Accessibility role, e.g. button, entry, menu item. Empty string for press_key and hotkey."
+              },
+              "name": {
+                "type": "string",
+                "description": "Accessible name to match. Empty string for press_key and hotkey."
+              },
+              "name_match": {
+                "type": "string",
+                "enum": ["exact", "substring"]
+              }
+            }
+          },
+          "value": {
+            "type": ["string", "null"],
+            "description": "Text to enter, or the key for press_key/hotkey. Null for actions taking no value. May contain {{variable}} references."
+          },
+          "condition": {
+            "type": "object",
+            "required": ["if", "else"],
+            "additionalProperties": false,
+            "description": "Optional. Omit entirely on unconditional steps.",
+            "properties": {
+              "if": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Plain English predicate evaluated against the current screen."
+              },
+              "else": {
+                "type": "string",
+                "enum": ["skip_step", "end_workflow"]
+              }
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Below 0.7 renders with a visible uncertainty marker."
+          }
+        }
+      }
+    },
+    "pruned": {
+      "type": "array",
+      "description": "Dead-ends, backtracks and corrections excluded from steps. Required, may be empty.",
+      "items": {
+        "type": "object",
+        "required": ["at_seconds", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "at_seconds": { "type": "number", "minimum": 0 },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Plain English. Rendered struck-through in the speedrun view."
+          }
+        }
+      }
+    }
+  }
+}

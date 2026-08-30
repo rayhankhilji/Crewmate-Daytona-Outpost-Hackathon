@@ -1,0 +1,116 @@
+/*
+ * Owari design tokens — the Owari brand system (cream / graphite, Satoshi).
+ *
+ * This is the ONLY file in web/ permitted to contain a literal colour value.
+ * Everywhere else, reference a token: via Tailwind's theme (bg-surface,
+ * text-muted, border-strong) or var(--token) directly. A hex value in any
+ * other file is a defect.
+ */
+
+:root {
+  /* Brand palette ------------------------------------------------------ */
+  --cream: #f6f2ec;
+  --sand: #eadfcf;
+  --blush: #f2e8e1;
+  --lavender: #e7e3ff;
+  --sky: #e6f0ff;
+  --graphite: #1c1c1e;
+
+  /* Surfaces ----------------------------------------------------------- */
+  --bg: var(--cream);
+  --surface: #ffffff;
+  --surface-raised: #fbf8f3;
+  --surface-sunken: var(--blush);
+  --border: #e9e1d6;
+  --border-strong: #d5cabb;
+
+  /* Text — every value below meets WCAG AA on both --bg and --surface,
+     except --text-faint, which is only ever de-emphasised, non-essential
+     content and never text a user must read to operate the product. */
+  --text: var(--graphite);
+  --text-muted: #6e6a63;
+  --text-faint: #877f74;
+
+  /* Meaning ------------------------------------------------------------ */
+  --accent: #227a4f;
+  --warning: #8a5d00;
+  --danger: #b03a32;
+  --info: #4f46d6;
+
+  /* Tints — pastel fills for status and emphasis, from the brand palette. */
+  --accent-tint: #e3f2e9;
+  --warning-tint: #f8eed6;
+  --danger-tint: #fbe6e3;
+  --info-tint: var(--lavender);
+
+  /* The one primary action: graphite on cream, per the brand's button. */
+  --action: var(--graphite);
+  --action-text: var(--cream);
+
+  /* Screens — video and live sandbox desktops are dark surfaces, so they
+     keep their own ground and their own foreground. */
+  --screen: #14141a;
+  --on-screen: var(--cream);
+  --scrim: rgba(20, 20, 26, 0.62);
+
+  /* Status mapping — fixed, and identical everywhere it is rendered. */
+  --status-complete: var(--accent);
+  --status-running: var(--text);
+  --status-skipped: var(--info);
+  --status-failed: var(--danger);
+  --status-pending: var(--text-faint);
+
+  /* Typography --------------------------------------------------------- */
+  /* Satoshi is the brand face. It is licensed through Fontshare and is not
+     redistributable via npm, so it leads the stack and Plus Jakarta Sans —
+     the closest geometric grotesque available offline — is bundled behind
+     it. Drop Satoshi's woff2 in and it takes over with no code change. */
+  --font-sans: 'Satoshi', 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  --text-xs: 0.75rem;
+  --text-xs-lh: 1.1rem;
+  --text-sm: 0.875rem;
+  --text-sm-lh: 1.35rem;
+  --text-base: 1rem;
+  --text-base-lh: 1.5rem;
+  --text-lg: 1.25rem;
+  --text-lg-lh: 1.75rem;
+  --text-xl: 1.5rem;
+  --text-xl-lh: 2rem;
+  --text-3xl: 2.5rem;
+  --text-3xl-lh: 3rem;
+
+  /* Spacing — base unit 4px -------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Layout ------------------------------------------------------------- */
+  --rail-width: 240px;
+  --content-max: 1440px;
+
+  /* Radii and elevation — the brand is soft and rounded, and cards sit on
+     the cream ground with a diffuse shadow rather than a hairline alone. */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --shadow-card: 0 1px 2px rgba(28, 28, 30, 0.04), 0 10px 30px rgba(28, 28, 30, 0.06);
+  --shadow-raised: 0 2px 6px rgba(28, 28, 30, 0.06), 0 18px 40px rgba(28, 28, 30, 0.08);
+  --shadow-modal: 0 32px 80px rgba(28, 28, 30, 0.22);
+
+  /* Motion — 150–250ms, one easing curve ------------------------------- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 250ms;
+  /* Motion 2 (pruned segment) holds at full opacity before collapsing. */
+  --duration-prune-hold: 400ms;
+
+  color-scheme: light;
+}
