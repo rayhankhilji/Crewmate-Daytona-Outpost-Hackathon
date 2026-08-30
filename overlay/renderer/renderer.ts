@@ -18,6 +18,7 @@ const recorder = new ScreenRecorder((formattedTime: string) => {
   timer.textContent = formattedTime;
 });
 let pendingRecording: SavedRecording | undefined;
+let pendingComprehensionId: string | undefined;
 
 function setStatus(message: string, isError = false): void {
   statusMessage.textContent = message;
@@ -40,7 +41,26 @@ async function uploadPendingRecording(): Promise<void> {
     pendingRecording.durationSeconds
   );
   pendingRecording = undefined;
-  setStatus(`Uploaded recording ${upload.id}.`);
+  pendingComprehensionId = upload.id;
+  await startPendingComprehension();
+}
+
+async function startPendingComprehension(): Promise<void> {
+  if (pendingComprehensionId === undefined) {
+    throw new Error("There is no uploaded recording ready for comprehension.");
+  }
+
+  setStatus("Opening the dashboard…");
+  const started = await window.crewmateOverlay.confirmComprehensionAndOpenDashboard(pendingComprehensionId);
+  if (!started) {
+    pendingComprehensionId = undefined;
+    setStatus("Uploaded. Open the dashboard whenever you are ready for AI review.");
+    setRecordButton("Record", "Start recording");
+    return;
+  }
+
+  pendingComprehensionId = undefined;
+  setStatus("Reading the recording. Your Brief will open when it is ready.");
   setRecordButton("Record", "Start recording");
 }
 
@@ -65,7 +85,10 @@ recordButton.addEventListener("click", async () => {
   openSettingsButton.hidden = true;
 
   try {
-    if (pendingRecording !== undefined) {
+    if (pendingComprehensionId !== undefined) {
+      setRecordButton("Retrying…", "Retrying comprehension startup");
+      await startPendingComprehension();
+    } else if (pendingRecording !== undefined) {
       setRecordButton("Retrying…", "Retrying the saved recording upload");
       await uploadPendingRecording();
     } else if (recorder.isRecording) {
@@ -86,7 +109,9 @@ recordButton.addEventListener("click", async () => {
     if (error instanceof ScreenRecordingPermissionError) {
       openSettingsButton.hidden = false;
     }
-    if (pendingRecording !== undefined) {
+    if (pendingComprehensionId !== undefined) {
+      setRecordButton("Retry review", "Retry starting AI review");
+    } else if (pendingRecording !== undefined) {
       setRecordButton("Retry upload", "Retry uploading the saved recording");
     } else {
       setRecordButton("Record", "Start recording");

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, screen, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, screen, shell, systemPreferences } from "electron";
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -7,6 +7,11 @@ import ffmpegPath from "ffmpeg-static";
 
 const WINDOW_WIDTH = 440;
 const WINDOW_HEIGHT = 176;
+const SERVER_URL = "http://127.0.0.1:8000";
+const DASHBOARD_RECORDINGS_URL = "http://localhost:5173/#/recordings";
+const DASHBOARD_BRIEF_URL = "http://localhost:5173/#/brief/";
+const BRIEF_POLL_INTERVAL_MILLISECONDS = 1_000;
+const BRIEF_POLL_ATTEMPTS = 900;
 
 interface WindowPosition {
   x: number;
@@ -172,7 +177,7 @@ async function uploadRecording(
 
   let response: Response;
   try {
-    response = await fetch("http://127.0.0.1:8000/recordings", {
+    response = await fetch(`${SERVER_URL}/recordings`, {
       method: "POST",
       body: formData
     });
@@ -192,6 +197,88 @@ async function uploadRecording(
   return { id: payload.id };
 }
 
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function openBriefWhenReady(recordingId: string): Promise<void> {
+  for (let attempt = 0; attempt < BRIEF_POLL_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(`${SERVER_URL}/recordings`);
+      if (!response.ok) {
+        throw new Error(`The local server returned ${response.status}.`);
+      }
+      const payload: unknown = await response.json();
+      const recordings =
+        typeof payload === "object" &&
+        payload !== null &&
+        "recordings" in payload &&
+        Array.isArray(payload.recordings)
+          ? payload.recordings
+          : [];
+      const recording = recordings.find(
+        (candidate): candidate is { id: string; status: string; brief_id: string | null } =>
+          typeof candidate === "object" &&
+          candidate !== null &&
+          "id" in candidate &&
+          "status" in candidate &&
+          "brief_id" in candidate &&
+          candidate.id === recordingId &&
+          typeof candidate.status === "string" &&
+          (typeof candidate.brief_id === "string" || candidate.brief_id === null)
+      );
+
+      if (recording?.brief_id !== null && recording?.brief_id !== undefined) {
+        await shell.openExternal(`${DASHBOARD_BRIEF_URL}${encodeURIComponent(recording.brief_id)}`);
+        return;
+      }
+      if (recording?.status === "failed") {
+        console.error(`Comprehension failed for recording ${recordingId}.`);
+        return;
+      }
+    } catch (error: unknown) {
+      console.error(`Could not check comprehension status for ${recordingId}.`, error);
+    }
+    await sleep(BRIEF_POLL_INTERVAL_MILLISECONDS);
+  }
+  console.error(`Timed out waiting for comprehension of recording ${recordingId}.`);
+}
+
+async function confirmComprehensionAndOpenDashboard(recordingId: string): Promise<boolean> {
+  const choice = await dialog.showMessageBox({
+    type: "question",
+    buttons: ["Not now", "Send for AI review"],
+    defaultId: 0,
+    cancelId: 0,
+    title: "Send recording for AI review?",
+    message: "Crewmate can turn this recording into an editable Brief.",
+    detail:
+      "This sends sampled screen images from the recording to the configured vision model. " +
+      "They may contain data visible in your apps."
+  });
+
+  await shell.openExternal(DASHBOARD_RECORDINGS_URL);
+  if (choice.response !== 1) {
+    return false;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${SERVER_URL}/recordings/${encodeURIComponent(recordingId)}/comprehend`, {
+      method: "POST"
+    });
+  } catch {
+    throw new Error("Crewmate could not start comprehension because the local server is unavailable.");
+  }
+
+  if (!response.ok && response.status !== 409) {
+    throw new Error("Crewmate could not start comprehension. Your recording remains safely uploaded.");
+  }
+
+  void openBriefWhenReady(recordingId);
+  return true;
+}
+
 ipcMain.handle("capture:primary-display-source", primaryDisplaySourceId);
 ipcMain.handle("recording:save", (_event, webmData: ArrayBuffer, durationSeconds: number) =>
   saveRecording(webmData, durationSeconds)
@@ -202,6 +289,9 @@ ipcMain.handle(
   "recording:upload",
   (_event, videoPath: string, taskName: string, durationSeconds: number) =>
     uploadRecording(videoPath, taskName, durationSeconds)
+);
+ipcMain.handle("recording:confirm-comprehension-and-open-dashboard", (_event, recordingId: string) =>
+  confirmComprehensionAndOpenDashboard(recordingId)
 );
 
 async function createOverlayWindow(): Promise<BrowserWindow> {

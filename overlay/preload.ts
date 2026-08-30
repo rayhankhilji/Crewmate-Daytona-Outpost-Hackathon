@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld("crewmateOverlay", {
     videoPath: string,
     taskName: string,
     durationSeconds: number
-  ): Promise<{ id: string }> => ipcRenderer.invoke("recording:upload", videoPath, taskName, durationSeconds)
+  ): Promise<{ id: string }> => ipcRenderer.invoke("recording:upload", videoPath, taskName, durationSeconds),
+  confirmComprehensionAndOpenDashboard: (recordingId: string): Promise<boolean> =>
+    ipcRenderer.invoke("recording:confirm-comprehension-and-open-dashboard", recordingId)
 });

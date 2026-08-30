@@ -9,6 +9,7 @@ interface CrewmateOverlayApi {
   openScreenRecordingSettings(): Promise<void>;
   saveRecording(webmData: ArrayBuffer, durationSeconds: number): Promise<SavedRecording>;
   uploadRecording(videoPath: string, taskName: string, durationSeconds: number): Promise<{ id: string }>;
+  confirmComprehensionAndOpenDashboard(recordingId: string): Promise<boolean>;
 }
 
 interface Window {
